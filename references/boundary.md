@@ -46,7 +46,7 @@ Preflight verifies that the target repository is in a state compatible with
 
 - Required file presence — does `ml_metaopt_campaign.yaml` exist and parse?
 - Directory structure — is the expected layout present or creatable?
-- Git state — is the repository clean enough for worktree operations?
+- Git state — is the repository free of interrupted or conflicted operations?
 
 ### 3. Bounded bootstrap mutations
 
