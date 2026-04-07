@@ -46,7 +46,8 @@ and lifecycle specification.
 metaopt-preflight/
 ├── agents/         # Agent catalog metadata
 ├── references/     # Authoritative reference docs and contracts
-│   └── boundary.md # Ownership boundary and lifecycle
+│   ├── boundary.md            # Ownership boundary and lifecycle
+│   └── readiness-artifact.md  # Readiness artifact schema and freshness rules
 ├── scripts/        # Preflight check implementations
 ├── tests/          # Validation and unit tests
 ├── SKILL.md        # Skill contract (input/output, rules)
@@ -55,6 +56,6 @@ metaopt-preflight/
 
 ## Status
 
-Scaffold with ownership boundary defined — skill implementation is tracked in
-subsequent tasks. The detailed readiness artifact schema, backend setup
-contract, and repo setup contract are deferred to later tasks.
+Ownership boundary and readiness artifact contract defined. Backend setup
+contract, repo setup contract, input contract, and check catalog are deferred
+to later tasks.

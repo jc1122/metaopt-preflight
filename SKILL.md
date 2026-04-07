@@ -108,15 +108,37 @@ remediated externally.
 
 ## Output contract
 
-<!-- To be defined in later tasks -->
+The output is a **readiness artifact** persisted at
+`.ml-metaopt/preflight-readiness.json`. The full schema and freshness rules
+are defined in `references/readiness-artifact.md`.
+
+Key fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| TBD | — | — |
+| `schema_version` | integer | Artifact schema version (currently `1`). |
+| `status` | string | `"READY"` or `"FAILED"`. |
+| `campaign_id` | string | Campaign identifier from the campaign spec. |
+| `campaign_identity_hash` | string | Campaign identity hash (`sha256:…`), matching the definition in `ml-metaoptimization/references/contracts.md`. |
+| `runtime_config_hash` | string | Runtime config hash (`sha256:…`), matching the definition in `ml-metaoptimization/references/contracts.md`. |
+| `emitted_at` | string | ISO 8601 timestamp of artifact emission. |
+| `checks_summary` | object | Aggregate counts: `total`, `passed`, `failed`, `bootstrapped`. |
+| `failures` | array | Failure records with `check_id`, `category`, `message`, `remediation`. Empty when `READY`. |
+| `next_action` | string | `"proceed"` when `READY`; remediation guidance when `FAILED`. |
+| `diagnostics` | string or null | Free-form notes (bootstrap actions taken, warnings). |
 
-The output is a **readiness artifact** consumed by `ml-metaoptimization` to
-confirm that the environment is safe to begin a campaign run. The detailed
-artifact schema will be defined in a later task.
+**Status semantics:** `READY` means all checks passed and
+`ml-metaoptimization` may proceed. `FAILED` means one or more checks remain
+failed — `failures` contains actionable details.
+
+**Freshness model:** The orchestrator verifies binding freshness cheaply by
+checking that the artifact's `campaign_identity_hash` and
+`runtime_config_hash` match its own computed values. Operational conditions
+(backend reachability, dependency availability) are point-in-time and cannot
+be re-verified without re-running preflight.
+
+**Overwrite semantics:** Each invocation overwrites any prior artifact. The
+latest on disk is always authoritative.
 
 ## Behavioral rules
 
@@ -146,10 +168,12 @@ will be specified in later tasks.
 | Coupling to orchestrator internals | This skill must remain independently invocable |
 | Writing campaign state files | `.ml-metaopt/state.json` and the `AGENTS.md` hook belong to `ml-metaoptimization` |
 | Implementing retry/resume logic | Preflight is one-shot; the caller re-invokes if needed |
-| Fully specifying artifact schema here | The readiness artifact schema is deferred to a later task |
+| Inventing new identity hashes incompatible with `ml-metaoptimization` | Reuse `campaign_identity_hash` and `runtime_config_hash` from `ml-metaoptimization/references/contracts.md` |
 
 ## References
 
 - `references/boundary.md` — authoritative ownership boundary and lifecycle
+- `references/readiness-artifact.md` — readiness artifact schema, freshness rules, and consumption protocol
 - [ml-metaoptimization](../ml-metaoptimization) — downstream orchestrator
+- [ml-metaoptimization/references/contracts.md](../ml-metaoptimization/references/contracts.md) — campaign identity and runtime config hash definitions
 - [ml-metaoptimization/references/backend-contract.md](../ml-metaoptimization/references/backend-contract.md) — backend expectations

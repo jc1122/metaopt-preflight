@@ -76,7 +76,8 @@ Preflight produces a readiness artifact that persists on disk. This artifact:
 - Is consumed by `ml-metaoptimization` to gate campaign entry.
 - Is overwritten on each preflight invocation (the latest is authoritative).
 
-The detailed readiness artifact schema is deferred to a later task.
+The detailed readiness artifact schema is defined in
+`references/readiness-artifact.md`.
 
 ## Ownership: what preflight does NOT own
 
@@ -202,7 +203,7 @@ later tasks:
 
 | Topic | Deferred to |
 |-------|-------------|
-| Readiness artifact schema (fields, format, versioning) | Artifact schema task |
+| Readiness artifact schema (fields, format, versioning) | `references/readiness-artifact.md` (**defined**) |
 | Backend setup contract (which bootstrap mutations are allowed, how backend readiness is probed) | Backend setup contract task |
 | Repo setup contract (which repository mutations are allowed, structural requirements) | Repo setup contract task |
 | Input contract (what configuration preflight reads and how) | Input contract task |
