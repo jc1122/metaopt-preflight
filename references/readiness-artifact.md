@@ -148,19 +148,31 @@ Freshness has two tiers with different verification costs:
 
 ### Tier 1 — Binding Freshness (cheap, orchestrator can verify)
 
+Binding freshness answers: "was this artifact produced for the current
+campaign and runtime configuration?" It is purely about artifact
+presence, parseability, and hash alignment — **not** about readiness
+outcome. A `FAILED` artifact with matching hashes is fresh (it accurately
+reflects the preflight result for this configuration); a `READY` artifact
+with mismatched hashes is stale.
+
 The orchestrator can verify binding freshness by comparing hash values
 already available during `LOAD_CAMPAIGN`:
 
-1. The artifact exists at `.ml-metaopt/preflight-readiness.json`.
-2. `status` equals `READY`.
-3. `campaign_identity_hash` in the artifact matches the orchestrator's
+1. The artifact exists at `.ml-metaopt/preflight-readiness.json` and is
+   parseable JSON with a recognized `schema_version`.
+2. `campaign_identity_hash` in the artifact matches the orchestrator's
    computed `campaign_identity_hash`.
-4. `runtime_config_hash` in the artifact matches the orchestrator's
+3. `runtime_config_hash` in the artifact matches the orchestrator's
    computed `runtime_config_hash`.
 
-If any of these conditions fail, the artifact is **stale** and the
-orchestrator must not proceed. It should block with a message directing the
-user to re-run `metaopt-preflight`.
+If any of these conditions fail, the artifact is **stale** (or absent) and
+the orchestrator must not proceed. It should block with a message directing
+the user to re-run `metaopt-preflight`.
+
+Note: The `status` field is **not** part of binding freshness. A fresh
+artifact may have `status` of either `READY` or `FAILED`. The orchestrator
+evaluates `status` as a separate readiness-outcome check after confirming
+binding freshness — see the Orchestrator Consumption Protocol below.
 
 **Rationale:** The campaign identity hash covers the campaign's structural
 identity (objective, datasets). The runtime config hash covers operational
@@ -249,13 +261,26 @@ defined.
 ## Orchestrator Consumption Protocol
 
 The orchestrator should consume the readiness artifact during
-`LOAD_CAMPAIGN` or `HYDRATE_STATE`, before entering the campaign loop:
+`LOAD_CAMPAIGN` or `HYDRATE_STATE`, before entering the campaign loop.
+The protocol distinguishes binding freshness (is this artifact for the
+current configuration?) from readiness outcome (did preflight succeed?):
 
 1. Attempt to read `.ml-metaopt/preflight-readiness.json`.
-2. If the file is missing → block with `next_action = "run metaopt-preflight"`.
-3. If the file is present, parse it and verify binding freshness (Tier 1).
-4. If binding freshness fails → block with `next_action = "re-run metaopt-preflight (campaign configuration has changed)"`.
-5. If binding freshness passes and `status` is `READY` → proceed.
+2. If the file is **missing or unreadable** (does not exist, is not valid
+   JSON, or has an unrecognized `schema_version`) → block with
+   `next_action = "run metaopt-preflight"`.
+3. If the file is present and parseable, verify **binding freshness**
+   (Tier 1): compare `campaign_identity_hash` and `runtime_config_hash`
+   against the orchestrator's computed values.
+4. If binding freshness **fails** (hash mismatch) → block with
+   `next_action = "re-run metaopt-preflight (campaign configuration has changed)"`.
+5. If binding freshness **passes** and `status` is `FAILED` → block using
+   the artifact's `failures` array and `next_action` field to present
+   actionable remediation guidance. The message should indicate that
+   preflight ran for the current configuration but the environment is not
+   ready — not that configuration has changed.
+6. If binding freshness **passes** and `status` is `READY` → proceed into
+   the campaign loop.
 
 The orchestrator must not attempt to re-run individual preflight checks. The
 readiness artifact is the sole interface; if it is absent or stale, the
