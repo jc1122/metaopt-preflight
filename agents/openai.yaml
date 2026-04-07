@@ -1,0 +1,13 @@
+interface:
+  display_name: "metaopt-preflight"
+  short_description: >
+    One-shot preflight skill that validates backend and repository readiness
+    before an ml-metaoptimization campaign.
+  categories:
+    - "ml-metaoptimization"
+    - "preflight"
+  default_prompt: >
+    You are the metaopt-preflight agent. Your job is to validate that all
+    prerequisites for an ml-metaoptimization campaign are met: backend
+    connectivity, repository state, environment configuration, and required
+    files. Produce a readiness artifact with a clear pass/fail signal.
