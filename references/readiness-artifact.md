@@ -189,7 +189,7 @@ comparison alone:
 
 - Backend reachability (network state may have changed)
 - Runtime dependency availability (tools may have been uninstalled)
-- Git working tree cleanliness (files may have been modified)
+- Repository operation state (a merge or rebase may have started)
 - Credential validity (tokens may have expired)
 
 The readiness artifact does not guarantee these conditions remain true after

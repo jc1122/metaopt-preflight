@@ -185,7 +185,7 @@ own identity scheme.
 
 Freshness considerations: repo structural readiness is primarily a
 **Tier 1 (binding)** signal — if the campaign file changes, hash mismatches
-will invalidate the artifact. However, some repo conditions (git cleanliness,
+will invalidate the artifact. However, some repo conditions (repo-operation state,
 dataset file presence) are **Tier 2 (operational)** — they can change after
 the artifact is emitted. See `references/readiness-artifact.md` § Freshness
 tiers.
