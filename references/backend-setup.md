@@ -38,8 +38,8 @@ metaopt-preflight
    or SSH commands.
 
 2. **`hetzner-delegation` translates to `ray-hetzner` scripts** — it calls
-   `ray-hetzner` lifecycle scripts (`cluster_status.sh`, `setup_head.sh`,
-   `build_snapshot.sh`, etc.) and queue commands (`enqueue_batch.py`,
+   `ray-hetzner` lifecycle scripts (`status.sh`, `setup_head.sh`,
+   `build_base_snapshot.sh`, etc.) and queue commands (`enqueue_batch.py`,
    `get_batch_status.py`) as documented in the `ray-hetzner` README.
 
 3. **Preflight interprets results** — the output from delegation calls
@@ -154,7 +154,7 @@ The following topics are explicitly outside this contract:
 | Raw Hetzner server administration (firewall rules, DNS, billing) | Operator / `hcloud` directly |
 | Detailed cluster lifecycle management (add/remove workers, autoscaling) | `hetzner-delegation` at campaign runtime |
 | Experiment execution, result collection, batch monitoring | `ml-metaoptimization` via `remote_queue` contract |
-| Repository setup and validation (file structure, dependencies, campaign file) | Separate repo-setup contract (future `references/repo-setup.md`) |
+| Repository setup and validation (file structure, dependencies, campaign file) | `references/repo-setup.md` |
 | Full readiness check catalog with exact check IDs | Future check-catalog reference |
 | Failure taxonomy and retry semantics | `references/readiness-artifact.md` for artifact schema; `ml-metaoptimization` for retry policy |
 | Second backend implementations | Future extensibility; one backend path for now |

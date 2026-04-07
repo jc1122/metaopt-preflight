@@ -59,7 +59,7 @@ scaffoldable.
 | R5 | `.ml-metaopt/artifacts/` subtree exists (`code/`, `data/`, `manifests/`, `patches/`) | **Yes** | All four subdirectories exist under `.ml-metaopt/artifacts/` |
 | R6 | Dataset paths declared in campaign spec exist (local paths only) | No | For each `datasets[].local_path`, verify the file exists. Paths are relative to project root. |
 | R7 | Sanity command is syntactically non-empty | No | `sanity.command` is a non-empty string. Preflight does not execute it. |
-| R8 | Git working tree is in a clean-enough state for worktree operations | No | `git status --porcelain` output does not indicate uncommitted changes that would block worktree creation. Untracked files are acceptable. |
+| R8 | Repository is not in a conflicted or interrupted operation state | No | `HEAD` resolves to a valid commit. No merge or rebase is in progress. |
 | R9 | `.ml-metaopt/` is git-ignored (or ignorable) | **Yes** | `.ml-metaopt` appears in an active gitignore rule. If not, preflight may add it. |
 
 ### What "basic structure" means (R3)
@@ -76,19 +76,22 @@ This keeps the boundary clean: preflight confirms the campaign file is
 structurally present and plausibly complete; the orchestrator validates
 semantics.
 
-### What "clean-enough" means (R8)
+### What R8 checks (repo-operation hygiene)
 
-The orchestrator creates isolated worktrees for experiment materialization.
-Worktree creation requires a resolvable HEAD and no conflicting index state.
-Preflight checks:
+The orchestrator performs git operations (worktree creation, branching,
+patching) throughout the campaign. While these operations do not strictly
+require a pristine working tree, an interrupted merge or rebase indicates
+the repository is in a state that the operator should resolve before
+starting a campaign. Preflight checks:
 
-- `HEAD` resolves to a valid commit.
-- No merge/rebase in progress (`git status` does not report merge conflict state).
-- The index is not locked (no `.git/index.lock`).
+- `HEAD` resolves to a valid commit (required for any meaningful git operation).
+- No merge or rebase is in progress (`git status` does not report
+  merge/rebase state). An in-progress merge or rebase signals unfinished
+  operator work, not a technical blocker for worktree creation, but a
+  campaign should not begin on top of unresolved repository housekeeping.
 
-Untracked files and unstaged changes to tracked files do **not** block
-worktree creation and are acceptable. Preflight does not require a fully
-clean working tree.
+Untracked files, unstaged changes, and the presence of `.git/index.lock`
+are **not** checked. Preflight does not require a fully clean working tree.
 
 ### Command path note (R7, and remote_queue/execution paths)
 
