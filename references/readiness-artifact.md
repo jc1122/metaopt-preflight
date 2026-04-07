@@ -310,6 +310,6 @@ defined in later tasks:
 | Topic | Deferred to |
 |-------|-------------|
 | Enumerated check IDs and their pass/fail criteria | Check catalog task |
-| Backend setup contract (probe commands, bootstrap mutations) | Backend setup contract task |
-| Repo setup contract (structural requirements, bootstrap mutations) | Repo setup contract task |
+| Backend setup contract (probe commands, bootstrap mutations) | `references/backend-setup.md` (**defined**) |
+| Repo setup contract (structural requirements, bootstrap mutations) | `references/repo-setup.md` (**defined**) |
 | Preflight input contract (what configuration preflight reads) | Input contract task |

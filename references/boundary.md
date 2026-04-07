@@ -204,8 +204,8 @@ later tasks:
 | Topic | Deferred to |
 |-------|-------------|
 | Readiness artifact schema (fields, format, versioning) | `references/readiness-artifact.md` (**defined**) |
-| Backend setup contract (which bootstrap mutations are allowed, how backend readiness is probed) | Backend setup contract task |
-| Repo setup contract (which repository mutations are allowed, structural requirements) | Repo setup contract task |
+| Backend setup contract (which bootstrap mutations are allowed, how backend readiness is probed) | `references/backend-setup.md` (**defined**) |
+| Repo setup contract (which repository mutations are allowed, structural requirements) | `references/repo-setup.md` (**defined**) |
 | Input contract (what configuration preflight reads and how) | Input contract task |
 | Detailed check catalog (enumerated readiness checks) | Implementation task |
 

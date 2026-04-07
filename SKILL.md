@@ -156,8 +156,9 @@ latest on disk is always authoritative.
 6. The skill MUST remain independently invocable — it must not depend on
    orchestrator internals or require the orchestrator to be running.
 
-Detailed mutation boundaries and repo setup contract will be specified in later
-tasks. The backend setup contract is defined in `references/backend-setup.md`.
+Detailed mutation boundaries are specified in the backend and repo setup
+contracts. See `references/backend-setup.md` for backend bootstrap actions and
+`references/repo-setup.md` for repo scaffolding and structural readiness.
 
 ## Common mistakes
 
@@ -175,6 +176,7 @@ tasks. The backend setup contract is defined in `references/backend-setup.md`.
 - `references/boundary.md` — authoritative ownership boundary and lifecycle
 - `references/readiness-artifact.md` — readiness artifact schema, freshness rules, and consumption protocol
 - `references/backend-setup.md` — backend setup contract, readiness conditions, and bootstrap actions
+- `references/repo-setup.md` — repo setup contract, structural readiness, and scaffolding mutations
 - [ml-metaoptimization](../ml-metaoptimization) — downstream orchestrator
 - [ml-metaoptimization/references/contracts.md](../ml-metaoptimization/references/contracts.md) — campaign identity and runtime config hash definitions
 - [ml-metaoptimization/references/backend-contract.md](../ml-metaoptimization/references/backend-contract.md) — backend expectations

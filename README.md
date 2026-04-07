@@ -48,7 +48,8 @@ metaopt-preflight/
 ├── references/     # Authoritative reference docs and contracts
 │   ├── boundary.md            # Ownership boundary and lifecycle
 │   ├── readiness-artifact.md  # Readiness artifact schema and freshness rules
-│   └── backend-setup.md       # Backend setup contract and readiness conditions
+│   ├── backend-setup.md       # Backend setup contract and readiness conditions
+│   └── repo-setup.md          # Repo setup contract and scaffolding mutations
 ├── scripts/        # Preflight check implementations
 ├── tests/          # Validation and unit tests
 ├── SKILL.md        # Skill contract (input/output, rules)
@@ -57,6 +58,6 @@ metaopt-preflight/
 
 ## Status
 
-Ownership boundary, readiness artifact contract, and backend setup contract
-defined. Repo setup contract, input contract, and check catalog are deferred
-to later tasks.
+Ownership boundary, readiness artifact contract, backend setup contract, and
+repo setup contract defined. Input contract and check catalog are deferred to
+later tasks.
