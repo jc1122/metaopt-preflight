@@ -15,7 +15,7 @@ artifact, and exits. The orchestrator consumes that artifact to gate campaign st
 | Lifecycle | One-shot | Resumable control loop |
 | Output | Readiness artifact | Campaign state |
 | Invocation | Before campaign | During campaign |
-| State mutation | None (read-only checks) | Yes |
+| State mutation | Bounded bootstrap only | Yes |
 
 ## Project layout
 
