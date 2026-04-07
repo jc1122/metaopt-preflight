@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "status": "READY",
+  "campaign_id": "example-campaign-001",
+  "campaign_identity_hash": "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "runtime_config_hash": "sha256:f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5",
+  "emitted_at": "2025-01-15T10:30:00Z",
+  "preflight_duration_seconds": 8.7,
+  "checks_summary": {
+    "total": 5,
+    "passed": 4,
+    "failed": 0,
+    "bootstrapped": 1
+  },
+  "failures": [],
+  "next_action": "proceed",
+  "diagnostics": "created .ml-metaopt/artifacts/ subtree"
+}

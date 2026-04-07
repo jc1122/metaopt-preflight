@@ -56,6 +56,18 @@ metaopt-preflight/
 └── README.md       # This file
 ```
 
+## Validation
+
+Run the contract-doc validation tests (stdlib-only, no extra dependencies):
+
+```
+python -m unittest tests.test_contract_docs -v
+```
+
+These tests verify that reference docs, SKILL.md, and example fixtures stay
+aligned on the public contract (artifact path, required fields, one-shot
+lifecycle semantics, reference set completeness).
+
 ## Status
 
 Ownership boundary, readiness artifact contract, backend setup contract, and
