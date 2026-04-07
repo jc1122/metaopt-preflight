@@ -53,6 +53,10 @@ resume, does not loop, and does not participate in the campaign state machine.
 - **Campaign state files** — preflight never reads or writes
   `.ml-metaopt/state.json` or the `AGENTS.md` resume hook.
 - **Worker dispatch** — preflight does not launch or manage subagent workers.
+- **Campaign input validation** — full schema validation and sentinel
+  detection for `ml_metaopt_campaign.yaml` belong to `ml-metaoptimization`
+  (`LOAD_CAMPAIGN`). Preflight only checks that the campaign file exists and
+  parses / has basic structure.
 
 See `references/boundary.md` for the authoritative boundary and lifecycle
 specification.
@@ -63,7 +67,9 @@ A single invocation proceeds through these phases in order:
 
 1. **Gather** — read configuration sources (campaign file, environment,
    backend declarations) to determine what must be checked and what bootstrap
-   actions may be required.
+   actions may be required. For the campaign file this means checking
+   existence and basic structure only — full schema validation is
+   `LOAD_CAMPAIGN`'s responsibility.
 2. **Evaluate** — run readiness checks against backend, repository, and
    environment. Collect pass/fail results and diagnostics for each check.
 3. **Bootstrap** — if any checks failed due to missing but provisionable
@@ -117,7 +123,7 @@ artifact schema will be defined in a later task.
 1. The skill MUST be idempotent — running it twice produces the same result.
 2. The skill MUST complete in a single invocation (no resumption, no
    persisted machine state).
-3. The skill MAY perform bounded persistent bootstrap mutations (e.g.,
+3. The skill MAY perform bounded idempotent bootstrap mutations (e.g.,
    backend/delegation setup, metaopt scaffolding, declared repo-preparation
    steps) required for metaoptimization readiness. It MUST NOT make
    experiment-specific code changes or modify campaign state.
