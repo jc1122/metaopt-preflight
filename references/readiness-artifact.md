@@ -260,8 +260,8 @@ defined.
 
 ## Orchestrator Consumption Protocol
 
-The orchestrator should consume the readiness artifact during
-`LOAD_CAMPAIGN` or `HYDRATE_STATE`, before entering the campaign loop.
+The orchestrator consumes the readiness artifact during `LOAD_CAMPAIGN`,
+before entering the campaign loop.
 The protocol distinguishes binding freshness (is this artifact for the
 current configuration?) from readiness outcome (did preflight succeed?):
 

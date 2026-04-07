@@ -258,6 +258,27 @@ class TestReadinessArtifactFixture(unittest.TestCase):
 # ── README validation section ───────────────────────────────────────────
 
 
+class TestConsumptionPointConsistency(unittest.TestCase):
+    """Orchestrator consumption protocol must specify LOAD_CAMPAIGN only."""
+
+    def test_consumption_protocol_specifies_load_campaign_only(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        section_marker = "## Orchestrator Consumption Protocol"
+        self.assertIn(section_marker, text, "readiness-artifact.md must have the consumption protocol section")
+        section = text.split(section_marker, 1)[1].split("\n## ", 1)[0]
+        self.assertIn(
+            "`LOAD_CAMPAIGN`",
+            section,
+            "consumption protocol must mention LOAD_CAMPAIGN",
+        )
+        self.assertNotIn(
+            "HYDRATE_STATE",
+            section,
+            "consumption protocol must NOT mention HYDRATE_STATE — "
+            "artifact is consumed during LOAD_CAMPAIGN only",
+        )
+
+
 class TestReadmeValidationSection(unittest.TestCase):
     """README must include a validation section explaining how to run tests."""
 
