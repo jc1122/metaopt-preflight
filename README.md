@@ -1,75 +1,141 @@
 # metaopt-preflight
 
-One-shot, idempotent preflight skill that validates backend connectivity, repository
-readiness, and environment prerequisites before launching an
-[ml-metaoptimization](../ml-metaoptimization) campaign.
+One-shot preflight check for [ml-metaoptimization](https://github.com/jc1122/ml-metaoptimization) campaigns.
 
-## Relationship to ml-metaoptimization
+## What it does
 
-`ml-metaoptimization` is a **resumable deterministic state machine** that drives
-the campaign loop (`LOAD_CAMPAIGN` → … → `COMPLETE`). It assumes the environment
-is already ready when it starts.
+Runs before you start an `ml-metaoptimization` campaign to verify that your
+repo structure, backend configuration, and environment are ready. It performs
+bounded bootstrap fixes where possible and emits a readiness artifact.
+`LOAD_CAMPAIGN` reads the artifact at startup — a stale or missing artifact
+blocks the campaign with `BLOCKED_CONFIG`.
 
-`metaopt-preflight` is the **one-shot preparation phase** that runs before the
-orchestrator. It evaluates readiness, performs bounded bootstrap mutations if
-needed, and emits a persisted readiness artifact. The orchestrator consumes that
-artifact to gate campaign entry. Once preflight exits, it plays no further role
-in the campaign.
+## Prerequisites
 
-The two skills share no runtime state. Preflight never reads or writes
-`.ml-metaopt/state.json`, and the orchestrator never re-invokes preflight.
+- Python 3.10+
+- SkyPilot with Vast.ai provider — `pip install 'skypilot[vast]'`
+- WandB credentials — `WANDB_API_KEY` env var or `wandb login`
+- `git` on PATH
 
-| Aspect | metaopt-preflight | ml-metaoptimization |
-|--------|-------------------|---------------------|
-| Lifecycle | One-shot, no resume | Resumable control loop |
-| Purpose | Environment/backend readiness | Campaign execution |
-| Output | Readiness artifact | Campaign state, experiment results |
-| Invocation | Before campaign | During campaign (possibly across reinvocations) |
-| State mutation | Bounded bootstrap only | Full campaign state management |
-| State files | None (artifact only) | `.ml-metaopt/state.json`, `AGENTS.md` hook |
+## Installation / usage
 
-## Ownership summary
+```bash
+# Clone and install deps (no pip install needed — it's a script)
+git clone https://github.com/jc1122/metaopt-preflight
+cd metaopt-preflight
+pip install -r requirements.txt
 
-**Preflight owns:** environment readiness evaluation, backend reachability
-checks, bounded idempotent bootstrap mutations, persisted readiness signal.
+# Run preflight
+python scripts/run_preflight.py --campaign /path/to/campaign.yaml [--cwd /project/root]
+```
 
-**Preflight does NOT own:** campaign loop, proposal lifecycle, experiment
-materialization/analysis, resumable state machine, worker dispatch.
+`--cwd` defaults to the current directory. It should point at the root of the
+git repo that contains `ml_metaopt_campaign.yaml`.
 
-See [SKILL.md](SKILL.md) for the full contract and
-[references/boundary.md](references/boundary.md) for the authoritative boundary
-and lifecycle specification.
+## Exit codes
 
-## Project layout
+| Code | Meaning |
+|------|---------|
+| 0 | READY — proceed with `ml-metaoptimization` |
+| 1 | FAILED — fix reported issues and re-run |
+| 2 | Usage error — bad args or malformed YAML |
+
+## What gets checked
+
+### Repository checks (R1–R9)
+
+| Check | Description | Scaffoldable |
+|-------|-------------|:------------:|
+| R1 | `.ml-metaopt/` directory exists | Yes |
+| R2 | `.gitignore` contains `.ml-metaopt/` entry | Yes |
+| R3 | `.ml-metaopt/handoffs/` subdir exists | Yes |
+| R4 | `.ml-metaopt/worker-results/` subdir exists | Yes |
+| R5 | `.ml-metaopt/tasks/` and `executor-events/` exist | Yes |
+| R6 | All `artifacts/` subdirs exist (`code/`, `data/`, `manifests/`, `patches/`) | Yes |
+| R7 | `project.smoke_test_command` is a non-empty string | No |
+| R8 | Required top-level campaign YAML keys present | No |
+| R9 | `project.repo` is a non-empty string | No |
+
+### Backend checks
+
+| Check | Description |
+|-------|-------------|
+| `skypilot_installed` | `sky` CLI on PATH |
+| `vast_configured` | Vast.ai enabled in SkyPilot (`sky check`) |
+| `wandb_credentials` | `WANDB_API_KEY` set or `~/.netrc` has `api.wandb.ai` |
+| `repo_access` | `git ls-remote` succeeds against `project.repo` |
+| `smoke_test_command_nonempty` | `project.smoke_test_command` is non-empty (warning) |
+
+## What bootstrap does
+
+Repo bootstrap mutations (B1–B3) are auto-applied for fixable issues:
+
+| ID | Trigger | Action |
+|----|---------|--------|
+| B1 | R1 fails | `mkdir -p .ml-metaopt` |
+| B2 | R3–R6 fail | `mkdir -p` all 8 required subdirectories |
+| B3 | R2 fails | Append `.ml-metaopt/` to `.gitignore` |
+
+All mutations are idempotent. Backend failures require manual remediation —
+preflight emits guidance but never auto-installs packages or modifies
+credentials.
+
+## Output artifact
+
+Written to `.ml-metaopt/preflight-readiness.json`:
+
+```json
+{
+  "schema_version": 1,
+  "status": "READY",
+  "campaign_id": "my-campaign",
+  "campaign_identity_hash": "sha256:…",
+  "runtime_config_hash": "sha256:…",
+  "emitted_at": "2025-01-15T12:00:00Z",
+  "preflight_duration_seconds": 4.2,
+  "checks_summary": { "total": 14, "passed": 12, "failed": 0, "bootstrapped": 2 },
+  "failures": [],
+  "next_action": "proceed",
+  "diagnostics": "Created .ml-metaopt/ subtree."
+}
+```
+
+Key fields: `status` (`READY` | `FAILED`), `campaign_identity_hash`,
+`failures` (empty when READY), `next_action` (`proceed` or remediation text).
+
+## Integration with ml-metaoptimization
+
+The readiness artifact is the sole interface between the two projects.
 
 ```
-metaopt-preflight/
-├── agents/         # Agent catalog metadata
-├── references/     # Authoritative reference docs and contracts
-│   ├── boundary.md            # Ownership boundary and lifecycle
-│   ├── readiness-artifact.md  # Readiness artifact schema and freshness rules
-│   ├── backend-setup.md       # Backend setup contract and readiness conditions
-│   └── repo-setup.md          # Repo setup contract and scaffolding mutations
-├── scripts/        # Preflight check implementations
-├── tests/          # Validation and unit tests
-├── SKILL.md        # Skill contract (input/output, rules)
-└── README.md       # This file
+metaopt-preflight                     ml-metaoptimization
+─────────────────                     ────────────────────
+ Gather → Evaluate → Bootstrap → Emit
+                                  │
+                                  ▼
+                          preflight-readiness.json
+                                  │
+                                  ▼
+                            LOAD_CAMPAIGN
 ```
+
+- Re-run preflight whenever campaign config changes.
+- `LOAD_CAMPAIGN` computes its own `campaign_identity_hash` and compares it
+  to the artifact. If they don't match → `BLOCKED_CONFIG`.
+- A `FAILED` artifact with matching hashes still blocks — the environment
+  isn't ready.
 
 ## Validation
 
-Run the contract-doc validation tests (stdlib-only, no extra dependencies):
-
+```bash
+python3 -m pytest -q
+# or: python -m unittest discover -s tests -p 'test_*.py'
 ```
-python -m unittest tests.test_contract_docs -v
-```
 
-These tests verify that reference docs, SKILL.md, and example fixtures stay
-aligned on the public contract (artifact path, required fields, one-shot
-lifecycle semantics, reference set completeness).
+## References
 
-## Status
-
-Ownership boundary, readiness artifact contract, backend setup contract, and
-repo setup contract defined. Input contract and check catalog are deferred to
-later tasks.
+- [SKILL.md](SKILL.md) — full skill contract (input/output, rules, phases)
+- [references/boundary.md](references/boundary.md) — ownership boundary and lifecycle
+- [references/readiness-artifact.md](references/readiness-artifact.md) — artifact schema and freshness rules
+- [references/backend-setup.md](references/backend-setup.md) — backend readiness checks and bootstrap
+- [references/repo-setup.md](references/repo-setup.md) — repo structure checks and scaffolding mutations
