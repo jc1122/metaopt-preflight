@@ -8,6 +8,7 @@ guidance the operator can follow to reach a ready state.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from scripts.checks.repo_checks import CheckResult
 
@@ -91,6 +92,14 @@ def guidance_repo_access(check_result: CheckResult) -> BackendBootstrapResult:
     return _guidance_for(check_result)
 
 
+_GUIDANCE_DISPATCH: dict[str, Callable[[CheckResult], BackendBootstrapResult]] = {
+    "skypilot_installed": guidance_skypilot,
+    "vast_configured": guidance_vast,
+    "wandb_credentials": guidance_wandb,
+    "repo_access": guidance_repo_access,
+}
+
+
 # ── Aggregate runner ────────────────────────────────────────────────────
 
 
@@ -102,4 +111,7 @@ def run_all_backend_bootstrap(
     Returns one ``BackendBootstrapResult`` per input ``CheckResult``,
     in the same order.
     """
-    return [_guidance_for(cr) for cr in check_results]
+    return [
+        _GUIDANCE_DISPATCH.get(cr.check_id, _guidance_for)(cr)
+        for cr in check_results
+    ]

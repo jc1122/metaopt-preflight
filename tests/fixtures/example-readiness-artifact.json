@@ -10,7 +10,8 @@
     "total": 5,
     "passed": 4,
     "failed": 0,
-    "bootstrapped": 1
+    "bootstrapped": 1,
+    "warnings": 0
   },
   "failures": [],
   "next_action": "proceed",

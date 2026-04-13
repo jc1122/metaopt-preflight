@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -54,10 +53,11 @@ def check_R2(campaign: dict, cwd: Path) -> CheckResult:
     content = gitignore.read_text()
     for line in content.splitlines():
         stripped = line.strip()
-        if stripped and not stripped.startswith("#") and _ML_METAOPT_DIR + "/" in stripped:
-            return CheckResult(
-                "R2", True, message=f".gitignore contains '{_ML_METAOPT_DIR}/' entry"
-            )
+        if stripped and not stripped.startswith("#"):
+            if stripped in (_ML_METAOPT_DIR + "/", _ML_METAOPT_DIR):
+                return CheckResult(
+                    "R2", True, message=f".gitignore contains '{_ML_METAOPT_DIR}/' entry"
+                )
     return CheckResult(
         "R2",
         False,
