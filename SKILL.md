@@ -101,7 +101,11 @@ remediated externally.
 ## Invocation
 
 ```bash
+# Preferred (works from any directory):
 python3 -m scripts.run_preflight --campaign path/to/campaign.yaml [--cwd /project/root]
+
+# Also works (must be run from repo root):
+python3 scripts/run_preflight.py --campaign path/to/campaign.yaml [--cwd /project/root]
 ```
 
 Exit codes: `0` = READY, `1` = FAILED, `2` = usage/input error.
