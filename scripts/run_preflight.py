@@ -17,15 +17,28 @@ from typing import Any
 
 import yaml
 
-from scripts._artifact_utils import build_artifact, write_artifact
-from scripts._hash_utils import (
-    compute_campaign_identity_hash,
-    compute_runtime_config_hash,
-)
-from scripts.bootstrap.backend_bootstrap import run_all_backend_bootstrap
-from scripts.bootstrap.repo_bootstrap import run_all_repo_bootstrap
-from scripts.checks.backend_checks import run_all_backend_checks
-from scripts.checks.repo_checks import CheckResult, run_all_repo_checks
+try:
+    from scripts._artifact_utils import build_artifact, write_artifact
+    from scripts._hash_utils import (
+        compute_campaign_identity_hash,
+        compute_runtime_config_hash,
+    )
+    from scripts.bootstrap.backend_bootstrap import run_all_backend_bootstrap
+    from scripts.bootstrap.repo_bootstrap import run_all_repo_bootstrap
+    from scripts.checks.backend_checks import run_all_backend_checks
+    from scripts.checks.repo_checks import CheckResult, run_all_repo_checks
+except ImportError:
+    # Direct script invocation: python3 scripts/run_preflight.py
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from scripts._artifact_utils import build_artifact, write_artifact
+    from scripts._hash_utils import (
+        compute_campaign_identity_hash,
+        compute_runtime_config_hash,
+    )
+    from scripts.bootstrap.backend_bootstrap import run_all_backend_bootstrap
+    from scripts.bootstrap.repo_bootstrap import run_all_repo_bootstrap
+    from scripts.checks.backend_checks import run_all_backend_checks
+    from scripts.checks.repo_checks import CheckResult, run_all_repo_checks
 
 _STATE_DIR_NAME = ".ml-metaopt"
 

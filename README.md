@@ -25,8 +25,11 @@ git clone https://github.com/jc1122/metaopt-preflight
 cd metaopt-preflight
 pip install -r requirements.txt
 
-# Run preflight
-python scripts/run_preflight.py --campaign /path/to/campaign.yaml [--cwd /project/root]
+# Run preflight (preferred — works from any directory):
+python3 -m scripts.run_preflight --campaign /path/to/campaign.yaml [--cwd /project/root]
+
+# Also works (must be run from repo root):
+python3 scripts/run_preflight.py --campaign /path/to/campaign.yaml [--cwd /project/root]
 ```
 
 `--cwd` defaults to the current directory. It should point at the root of the
