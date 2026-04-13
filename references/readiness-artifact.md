@@ -229,14 +229,13 @@ changed.
 This artifact reuses the identity concepts defined in
 `ml-metaoptimization/references/contracts.md`:
 
-- **`campaign_identity_hash`** — canonical hash over `version`,
-  `campaign_id`, `objective.metric`, `objective.direction`,
-  `objective.aggregation`, and sorted dataset entries. Defined and owned by
-  `ml-metaoptimization`.
+- **`campaign_identity_hash`** — canonical hash over `campaign.name`,
+  `objective.metric`, `objective.direction`, `wandb.entity`, and
+  `wandb.project`. Defined and owned by `ml-metaoptimization`.
 
-- **`runtime_config_hash`** — canonical hash over `sanity`, `artifacts`,
-  `remote_queue`, and `execution`. Defined and owned by
-  `ml-metaoptimization`.
+- **`runtime_config_hash`** — canonical hash over `compute` (entire block),
+  `wandb.entity`, `wandb.project`, `project.repo`, and
+  `project.smoke_test_command`. Defined and owned by `ml-metaoptimization`.
 
 Preflight computes these hashes using the same canonicalization rules
 specified in the Campaign Identity Hash Contract. It does not define its own
@@ -246,10 +245,11 @@ competing identity scheme.
 
 The two existing hashes provide sufficient coverage for binding freshness:
 
-- **Backend identity** (which backend, endpoint, retry policy) is captured
-  in `remote_queue`, which is part of `runtime_config_hash`.
-- **Execution configuration** (entrypoint, sanity commands) is captured in
-  `execution` and `sanity`, which are part of `runtime_config_hash`.
+- **Backend identity** (compute provider, accelerator, budget) is captured
+  in `compute`, which is part of `runtime_config_hash`.
+- **Execution configuration** (repo, smoke test command) is captured in
+  `project.repo` and `project.smoke_test_command`, which are part of
+  `runtime_config_hash`.
 
 If future tasks (backend setup contract, repo setup contract) reveal
 preflight inputs not covered by these two hashes — for example,
