@@ -1,12 +1,6 @@
 """Integration tests: bootstrap mutations fix corresponding repo checks.
 
 Verifies B1–B3 fix R1–R6, are idempotent on re-run, and handle edge cases.
-
-Known bugs documented by these tests:
-  - B1 raises OSError when .ml-metaopt exists as a file instead of returning
-    a BootstrapResult with an error (test_14).
-  - B3 raises PermissionError on a read-only .gitignore instead of returning
-    a BootstrapResult with an error (test_15).
 """
 
 from __future__ import annotations
