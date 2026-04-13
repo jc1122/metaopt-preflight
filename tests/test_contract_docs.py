@@ -28,7 +28,7 @@ REQUIRED_ARTIFACT_FIELDS = [
     "diagnostics",
 ]
 
-REQUIRED_CHECKS_SUMMARY_FIELDS = ["total", "passed", "failed", "bootstrapped"]
+REQUIRED_CHECKS_SUMMARY_FIELDS = ["total", "passed", "failed", "bootstrapped", "warnings"]
 
 
 def _read(path: str) -> str:
@@ -236,9 +236,9 @@ class TestReadinessArtifactFixture(unittest.TestCase):
         data = json.loads(_read(self.FIXTURE_PATH))
         s = data["checks_summary"]
         self.assertEqual(
-            s["passed"] + s["failed"] + s["bootstrapped"],
+            s["passed"] + s["failed"] + s["bootstrapped"] + s["warnings"],
             s["total"],
-            "passed + failed + bootstrapped must equal total",
+            "passed + failed + bootstrapped + warnings must equal total",
         )
 
     def test_fixture_status_is_valid(self):
@@ -296,6 +296,92 @@ class TestReadmeValidationSection(unittest.TestCase):
             "python -m unittest",
             text,
             "README.md validation section must mention how to run tests",
+        )
+
+
+# ── Warnings field and updated invariant ────────────────────────────────
+
+
+class TestWarningsFieldContract(unittest.TestCase):
+    """The warnings field must be present in the fixture and documented."""
+
+    def test_checks_summary_has_warnings_field(self):
+        data = json.loads(_read(os.path.join(FIXTURES_DIR, "example-readiness-artifact.json")))
+        self.assertIn(
+            "warnings",
+            data["checks_summary"],
+            "checks_summary must include a 'warnings' field",
+        )
+
+    def test_readiness_doc_mentions_warnings(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        self.assertIn(
+            "warnings",
+            text,
+            "readiness-artifact.md must mention the warnings field",
+        )
+
+    def test_invariant_includes_warnings(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        self.assertIn(
+            "passed + failed + bootstrapped + warnings == total",
+            text,
+            "readiness-artifact.md invariant must include warnings",
+        )
+
+
+# ── Preflight duration field ────────────────────────────────────────────
+
+
+class TestPreflightDurationField(unittest.TestCase):
+    """preflight_duration_seconds must be present in the fixture."""
+
+    def test_fixture_has_preflight_duration_seconds(self):
+        data = json.loads(_read(os.path.join(FIXTURES_DIR, "example-readiness-artifact.json")))
+        self.assertIn(
+            "preflight_duration_seconds",
+            data,
+            "Fixture must include preflight_duration_seconds",
+        )
+
+
+# ── R8 key correctness ─────────────────────────────────────────────────
+
+
+class TestRepoSetupKeyCorrectness(unittest.TestCase):
+    """repo-setup.md R3 must list campaign_id, not campaign_name."""
+
+    def test_repo_setup_mentions_campaign_key_not_campaign_name(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        self.assertIn(
+            "campaign_id",
+            text,
+            "repo-setup.md must list campaign_id as a required key",
+        )
+        self.assertNotIn(
+            "campaign_name",
+            text,
+            "repo-setup.md must NOT list campaign_name as a required key",
+        )
+
+
+# ── Boundary doc hash/resume gate ──────────────────────────────────────
+
+
+class TestBoundaryDocHashResumeGate(unittest.TestCase):
+    """boundary.md must describe hash-based campaign-change detection and resume semantics."""
+
+    def test_boundary_doc_has_hash_resume_gate(self):
+        text = _read(os.path.join(REFERENCES_DIR, "boundary.md")).lower()
+        self.assertIn(
+            "hash",
+            text,
+            "boundary.md must mention hash-based staleness detection",
+        )
+        self.assertIn(
+            "resume",
+            text,
+            "boundary.md must mention resume semantics (no resume)",
         )
 
 
