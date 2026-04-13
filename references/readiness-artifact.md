@@ -49,7 +49,8 @@ Consumers must treat the on-disk artifact as a point-in-time snapshot.
     "total": 5,
     "passed": 4,
     "failed": 0,
-    "bootstrapped": 1
+    "bootstrapped": 1,
+    "warnings": 0
   },
   "failures": [],
   "next_action": "proceed",
@@ -81,8 +82,9 @@ Consumers must treat the on-disk artifact as a point-in-time snapshot.
 | `passed` | non-negative integer | Checks that passed on initial evaluation. |
 | `failed` | non-negative integer | Checks that remain failed after any bootstrap attempts. |
 | `bootstrapped` | non-negative integer | Checks that initially failed but passed after a bootstrap mutation. |
+| `warnings` | non-negative integer | Checks with `category="warning"` that do not block readiness. |
 
-Invariant: `passed + failed + bootstrapped == total`.
+Invariant: `passed + failed + bootstrapped + warnings == total`.
 
 ### Failure Records
 

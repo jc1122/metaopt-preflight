@@ -233,7 +233,7 @@ def test_bootstrapped_count_positive(mock_backend, tmp_path: Path) -> None:
     artifact = json.loads(artifact_path.read_text())
     summary = artifact["checks_summary"]
     assert summary["bootstrapped"] > 0
-    assert summary["total"] == summary["passed"] + summary["failed"] + summary["bootstrapped"]
+    assert summary["total"] == summary["passed"] + summary["failed"] + summary["bootstrapped"] + summary.get("warnings", 0)
 
 
 # ── Additional edge-case tests ───────────────────────────────────────

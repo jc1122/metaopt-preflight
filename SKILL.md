@@ -146,7 +146,7 @@ Key fields:
 | `campaign_identity_hash` | string | Campaign identity hash (`sha256:…`), matching the definition in `ml-metaoptimization/references/contracts.md`. |
 | `runtime_config_hash` | string | Runtime config hash (`sha256:…`), matching the definition in `ml-metaoptimization/references/contracts.md`. |
 | `emitted_at` | string | ISO 8601 timestamp of artifact emission. |
-| `checks_summary` | object | Aggregate counts: `total`, `passed`, `failed`, `bootstrapped`. |
+| `checks_summary` | object | Aggregate counts: `total`, `passed`, `failed`, `bootstrapped`, `warnings`. |
 | `failures` | array | Failure records with `check_id`, `category`, `message`, `remediation`. Empty when `READY`. |
 | `next_action` | string | `"proceed"` when `READY`; remediation guidance when `FAILED`. |
 | `diagnostics` | string or null | Free-form notes (bootstrap actions taken, warnings). |
