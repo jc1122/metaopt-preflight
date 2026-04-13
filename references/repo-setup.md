@@ -56,7 +56,7 @@ scaffoldable.
 | R2 | `ml_metaopt_campaign.yaml` exists and is parseable YAML | No | File exists at `{project_root}/ml_metaopt_campaign.yaml` and parses without error |
 | R3 | Campaign file has basic structure (required top-level keys present) | No | Top-level keys `version`, `campaign_id`, `objective`, `datasets`, `sanity`, `artifacts`, `remote_queue`, `execution` are present. No deep value validation — that is `LOAD_CAMPAIGN`'s job. |
 | R4 | `.ml-metaopt/` directory exists | **Yes** | Directory exists at `{project_root}/.ml-metaopt/` |
-| R5 | `.ml-metaopt/artifacts/` subtree exists (`code/`, `data/`, `manifests/`, `patches/`) | **Yes** | All four subdirectories exist under `.ml-metaopt/artifacts/` |
+| R5 | `.ml-metaopt/` subtree exists (artifact subdirs + operational subdirs) | **Yes** | All eight subdirectories exist: `.ml-metaopt/artifacts/{code,data,manifests,patches}` and `.ml-metaopt/{handoffs,worker-results,tasks,executor-events}` |
 | R6 | Dataset paths declared in campaign spec exist (local paths only) | No | For each `datasets[].local_path`, verify the file exists. Paths are relative to project root. |
 | R7 | Sanity command is syntactically non-empty | No | `sanity.command` is a non-empty string. Preflight does not execute it. |
 | R8 | Repository is not in a conflicted or interrupted operation state | No | `HEAD` resolves to a valid commit. No merge or rebase is in progress. |
@@ -107,6 +107,15 @@ readiness concern covered by `references/backend-setup.md` § Queue commands
 available. Full command semantic validation is `LOAD_CAMPAIGN`'s
 responsibility.
 
+### Smoke test command scope
+
+`project.smoke_test_command` follows the same principle. Preflight verifies
+that the field is present and syntactically non-empty (no sentinel
+placeholders). Preflight does **not** execute it. Actual execution — with a
+hard 60-second timeout — is `LOCAL_SANITY`'s responsibility within
+`ml-metaoptimization`. `LOAD_CAMPAIGN` additionally validates that the value
+is a non-empty string with no sentinels (`YOUR_*`, `replace-me`, `<…>`).
+
 ---
 
 ## Allowed bootstrap mutations
@@ -120,7 +129,7 @@ constraints in `references/boundary.md` § Bootstrap mutations.
 | ID | Trigger | Action | Idempotency |
 |----|---------|--------|-------------|
 | B1 | `.ml-metaopt/` directory missing (R4 fails) | `mkdir -p .ml-metaopt` | Creating an existing directory is a no-op |
-| B2 | Artifact subdirectories missing (R5 fails) | `mkdir -p .ml-metaopt/artifacts/{code,data,manifests,patches}` | Creating existing directories is a no-op |
+| B2 | Required subdirectories missing (R5 fails) | `mkdir -p .ml-metaopt/artifacts/{code,data,manifests,patches} .ml-metaopt/{handoffs,worker-results,tasks,executor-events}` | Creating existing directories is a no-op |
 | B3 | `.ml-metaopt` not in gitignore (R9 fails) | Append `.ml-metaopt/` to the project-root `.gitignore` (create the file if absent) | Re-appending a line already present is skipped; only adds if not already covered by an existing rule |
 
 ### Bootstrap constraints
