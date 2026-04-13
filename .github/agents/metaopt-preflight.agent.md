@@ -18,7 +18,7 @@ You are the preflight readiness agent for `ml-metaoptimization`. You run once be
 
 1. **Campaign YAML** — path to `ml_metaopt_campaign.yaml` (passed via `--campaign <path>`)
 2. **Working directory** — project root containing the git repository (passed via `--cwd <dir>`, defaults to current directory)
-3. **Dry-run flag** (optional) — `--dry-run` skips bootstrap mutations and reports what would be done
+3. *(no further flags — the tool has no dry-run mode)*
 
 From the campaign YAML, you read only the fields needed for readiness checks and hash computation:
 
@@ -58,15 +58,15 @@ Run all readiness checks and record pass/fail with diagnostics.
 
 | # | Check | Scaffoldable |
 |---|-------|:------------:|
-| R1 | Target directory is a git repo with ≥1 commit | No |
-| R2 | `ml_metaopt_campaign.yaml` exists and parses | No |
-| R3 | Campaign file has required top-level keys (`version`, `campaign_id`, `objective`, `datasets`, `sanity`, `artifacts`, `remote_queue`, `execution`) | No |
-| R4 | `.ml-metaopt/` directory exists | Yes |
-| R5 | `.ml-metaopt/` subtree exists (8 subdirs: `artifacts/{code,data,manifests,patches}`, `handoffs`, `worker-results`, `tasks`, `executor-events`) | Yes |
-| R6 | Dataset local paths declared in campaign spec exist | No |
-| R7 | Sanity command is syntactically non-empty | No |
-| R8 | Repository not in conflicted/interrupted state (HEAD valid, no merge/rebase in progress) | No |
-| R9 | `.ml-metaopt/` is git-ignored | Yes |
+| R1 | `.ml-metaopt/` directory exists | Yes |
+| R2 | Root `.gitignore` contains `.ml-metaopt/` entry | Yes |
+| R3 | `.ml-metaopt/handoffs/` subdir exists | Yes |
+| R4 | `.ml-metaopt/worker-results/` subdir exists | Yes |
+| R5 | `.ml-metaopt/tasks/` and `.ml-metaopt/executor-events/` exist | Yes |
+| R6 | All 4 `artifacts/` subdirs exist (`code/`, `data/`, `manifests/`, `patches/`) | Yes |
+| R7 | `project.smoke_test_command` is a non-empty string (syntax-only) | No |
+| R8 | Required top-level campaign YAML keys present (`campaign_name`, `objective`, `wandb`, `compute`, `project`, `search_space`) | No |
+| R9 | `project.repo` is a non-empty string | No |
 
 **Backend checks (5 checks):**
 
@@ -78,7 +78,7 @@ Run all readiness checks and record pass/fail with diagnostics.
 | Project repo accessible | Git remote reachable | `git ls-remote` against `project.repo` |
 | Smoke test command present | `project.smoke_test_command` is non-empty string | Field inspection |
 
-All checks must pass for `status: "READY"`. Any failure produces `status: "FAILED"` with actionable diagnostics.
+All non-warning checks must pass for `status: "READY"`. Any hard failure produces `status: "FAILED"` with actionable diagnostics.
 
 ### Phase 3 — Bootstrap
 
@@ -88,13 +88,13 @@ For each failed check that has a declared bootstrap remedy, perform a bounded id
 
 | ID | Trigger | Action |
 |----|---------|--------|
-| B1 | R4 fails — `.ml-metaopt/` missing | `mkdir -p .ml-metaopt` |
-| B2 | R5 fails — subdirectories missing | `mkdir -p .ml-metaopt/artifacts/{code,data,manifests,patches} .ml-metaopt/{handoffs,worker-results,tasks,executor-events}` |
-| B3 | R9 fails — `.ml-metaopt` not gitignored | Append `.ml-metaopt/` to `.gitignore` (create if absent; skip if already covered) |
+| B1 | R1 fails — `.ml-metaopt/` missing | `mkdir -p .ml-metaopt` |
+| B2 | R3/R4/R5/R6 fail — subdirectories missing | `mkdir -p` all 8 subdirs (`handoffs`, `worker-results`, `tasks`, `executor-events`, `artifacts/{code,data,manifests,patches}`) |
+| B3 | R2 fails — `.ml-metaopt/` not in `.gitignore` | Append `.ml-metaopt/` to `.gitignore` (create if absent; skip if already covered) |
 
-**Backend bootstrap:** Preflight MAY attempt `pip install skypilot[vastai]` if the Python environment is writable. For all other backend failures (Vast.ai not configured, WandB credentials missing, repo inaccessible), preflight emits advisory remediation guidance — it does not perform automated fixes.
+**Backend bootstrap:** Backend bootstrap is advisory only — preflight emits remediation guidance but never auto-installs packages or modifies credentials. For all backend failures (SkyPilot missing, Vast.ai not configured, WandB credentials missing, repo inaccessible), preflight emits actionable remediation guidance.
 
-All mutations are idempotent. In `--dry-run` mode, mutations are skipped and reported as "would bootstrap".
+All mutations are idempotent. Re-applying to an already-ready environment is a no-op.
 
 ### Phase 4 — Emit
 
@@ -147,13 +147,13 @@ Key fields:
 ## Invocation
 
 ```bash
-python scripts/run_preflight.py --campaign <path-to-campaign.yaml> [--cwd <project-root>] [--dry-run]
+python scripts/run_preflight.py --campaign <path-to-campaign.yaml> [--cwd <project-root>]
 ```
 
 ## What This Agent Does NOT Do
 
 - **Does not execute `smoke_test_command`** — presence is verified; execution is `LOCAL_SANITY`'s job at runtime via `skypilot-wandb-worker`.
-- **Does not install SkyPilot or configure Vast.ai automatically** — may attempt pip install if environment is writable; Vast.ai configuration requires user action.
+- **Does not install SkyPilot or configure Vast.ai automatically** — emits remediation guidance only; all backend setup requires user action.
 - **Does not start or provision compute clusters** — there are no persistent clusters in v4; `sky launch` is a runtime operation owned by `skypilot-wandb-worker`.
 - **Does not manage WandB projects or sweeps** — credential verification only; sweep lifecycle belongs to `skypilot-wandb-worker`.
 - **Does not read or write `.ml-metaopt/state.json`** — campaign state is owned exclusively by `ml-metaoptimization`.
