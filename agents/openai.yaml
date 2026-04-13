@@ -1,3 +1,4 @@
+model: strong_reasoner
 interface:
   display_name: "metaopt-preflight"
   short_description: >
