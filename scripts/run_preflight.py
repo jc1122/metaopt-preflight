@@ -148,6 +148,7 @@ def run_preflight(
     total = len(all_results)
     passed_count = sum(1 for r in all_results if r.passed and not r.bootstrapped)
     failed_count = len(remaining_hard_failures)
+    warning_count = len(warnings)
 
     if warnings:
         w_msgs = [f"{w.check_id}: {w.message}" for w in warnings]
@@ -158,6 +159,7 @@ def run_preflight(
         "passed": passed_count,
         "failed": failed_count,
         "bootstrapped": bootstrapped_count,
+        "warnings": warning_count,
     }
 
     diagnostics = "; ".join(diagnostics_parts) if diagnostics_parts else None
@@ -181,7 +183,8 @@ def run_preflight(
     print(f"total:       {total}")
     print(f"passed:      {passed_count}")
     print(f"failed:      {failed_count}")
-    print(f"bootstrapped:{bootstrapped_count}")
+    print(f"warnings:    {warning_count}")
+    print(f"bootstrapped: {bootstrapped_count}")
     print(f"artifact:    {artifact_path}")
 
     return 0 if status == "READY" else 1

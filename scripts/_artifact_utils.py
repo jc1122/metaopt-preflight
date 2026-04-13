@@ -46,6 +46,7 @@ def build_artifact(
         "passed": checks_summary.get("passed", 0),
         "failed": checks_summary.get("failed", 0),
         "bootstrapped": checks_summary.get("bootstrapped", 0),
+        "warnings": checks_summary.get("warnings", 0),
     }
 
     return {
