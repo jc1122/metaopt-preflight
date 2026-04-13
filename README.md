@@ -13,6 +13,8 @@ blocks the campaign with `BLOCKED_CONFIG`.
 ## Prerequisites
 
 - Python 3.10+
+- PyYAML ≥ 6.0 (installed via `requirements.txt`)
+- [ml-metaoptimization](https://github.com/jc1122/ml-metaoptimization) campaign YAML
 - SkyPilot with Vast.ai provider — `pip install 'skypilot[vast]'`
 - WandB credentials — `WANDB_API_KEY` env var or `wandb login`
 - `git` on PATH
@@ -32,8 +34,12 @@ python3 -m scripts.run_preflight --campaign /path/to/campaign.yaml [--cwd /proje
 python3 scripts/run_preflight.py --campaign /path/to/campaign.yaml [--cwd /project/root]
 ```
 
-`--cwd` defaults to the current directory. It should point at the root of the
-git repo that contains `ml_metaopt_campaign.yaml`.
+### CLI flags
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--campaign` | Yes | — | Path to campaign YAML file |
+| `--cwd` | No | `.` | Project root directory (must contain `ml_metaopt_campaign.yaml`) |
 
 ## Exit codes
 
@@ -59,7 +65,7 @@ git repo that contains `ml_metaopt_campaign.yaml`.
 | R8 | Required top-level campaign YAML keys present | No |
 | R9 | `project.repo` is a non-empty string | No |
 
-### Backend checks
+### Backend checks (advisory — not auto-fixed)
 
 | Check | Description |
 |-------|-------------|
@@ -96,7 +102,7 @@ Written to `.ml-metaopt/preflight-readiness.json`:
   "runtime_config_hash": "sha256:…",
   "emitted_at": "2025-01-15T12:00:00Z",
   "preflight_duration_seconds": 4.2,
-  "checks_summary": { "total": 14, "passed": 12, "failed": 0, "bootstrapped": 2 },
+  "checks_summary": { "total": 14, "passed": 12, "failed": 0, "bootstrapped": 2, "warnings": 0 },
   "failures": [],
   "next_action": "proceed",
   "diagnostics": "Created .ml-metaopt/ subtree."
@@ -105,6 +111,18 @@ Written to `.ml-metaopt/preflight-readiness.json`:
 
 Key fields: `status` (`READY` | `FAILED`), `campaign_identity_hash`,
 `failures` (empty when READY), `next_action` (`proceed` or remediation text).
+
+`checks_summary` counters:
+
+| Field | Meaning |
+|-------|---------|
+| `total` | Number of checks evaluated |
+| `passed` | Passed on initial evaluation |
+| `failed` | Still failing after bootstrap |
+| `bootstrapped` | Initially failed, fixed by bootstrap |
+| `warnings` | Advisory issues that don't block readiness |
+
+Invariant: `passed + failed + bootstrapped + warnings == total`.
 
 ## Integration with ml-metaoptimization
 
