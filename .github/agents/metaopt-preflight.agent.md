@@ -65,7 +65,7 @@ Run all readiness checks and record pass/fail with diagnostics.
 | R5 | `.ml-metaopt/tasks/` and `.ml-metaopt/executor-events/` exist | Yes |
 | R6 | All 4 `artifacts/` subdirs exist (`code/`, `data/`, `manifests/`, `patches/`) | Yes |
 | R7 | `project.smoke_test_command` is a non-empty string (syntax-only) | No |
-| R8 | Required top-level campaign YAML keys present (`campaign_name`, `objective`, `wandb`, `compute`, `project`, `search_space`) | No |
+| R8 | Required top-level campaign YAML keys present (`campaign`, `project`, `wandb`, `compute`, `objective`) | No |
 | R9 | `project.repo` is a non-empty string | No |
 
 **Backend checks (5 checks):**
@@ -117,7 +117,8 @@ The readiness artifact persisted at `.ml-metaopt/preflight-readiness.json`:
     "total": 14,
     "passed": 12,
     "failed": 0,
-    "bootstrapped": 2
+    "bootstrapped": 2,
+    "warnings": 0
   },
   "failures": [],
   "next_action": "proceed",
@@ -132,7 +133,7 @@ Key fields:
 | `status` | `"READY"` or `"FAILED"` — no other values |
 | `campaign_identity_hash` | Binding freshness signal consumed by `LOAD_CAMPAIGN` |
 | `failures` | Empty when READY; array of `{check_id, category, message, remediation}` when FAILED |
-| `checks_summary` | Aggregate counts. Invariant: `passed + failed + bootstrapped == total` |
+| `checks_summary` | Aggregate counts. Invariant: `passed + failed + bootstrapped + warnings == total` |
 | `next_action` | `"proceed"` when READY; remediation summary when FAILED |
 | `runtime_config_hash` | Emitted for forward compatibility; not validated by v4 |
 
