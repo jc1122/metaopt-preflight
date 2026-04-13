@@ -222,6 +222,12 @@ contracts. See `references/backend-setup.md` for backend bootstrap actions and
 | Implementing retry/resume logic | Preflight is one-shot; the caller re-invokes if needed |
 | Inventing new identity hashes incompatible with `ml-metaoptimization` | Reuse `campaign_identity_hash` and `runtime_config_hash` from `ml-metaoptimization/references/contracts.md` |
 
+## Context Window Guide
+
+**Read `references/context-window-guide.md` before your first action.** It tells you exactly which files to read, when, and which to skip to stay within your context budget.
+
+TL;DR: read `SKILL.md` + `references/readiness-artifact.md` + the campaign YAML at the start of every invocation. Reach for the other reference docs only when debugging a specific check failure. Never read `tests/`, `scripts/bootstrap/`, or orchestrator source. Estimated budget: ~2000–4000 tokens before check results.
+
 ## References
 
 - `references/boundary.md` — authoritative ownership boundary and lifecycle
