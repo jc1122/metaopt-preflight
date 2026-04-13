@@ -54,7 +54,7 @@ def fully_setup(tmp_path: Path) -> Path:
     ml = tmp_path / _ML_DIR
     for subdir in _ALL_SUBDIRS:
         (ml / subdir).mkdir(parents=True, exist_ok=True)
-    gitignore = ml / ".gitignore"
+    gitignore = tmp_path / ".gitignore"
     gitignore.write_text(".ml-metaopt/\n")
     return tmp_path
 
@@ -87,14 +87,14 @@ def test_R1_passes(fully_setup: Path) -> None:
 
 
 def test_R2_fails_when_gitignore_missing(fully_setup: Path) -> None:
-    (fully_setup / _ML_DIR / ".gitignore").unlink()
+    (fully_setup / ".gitignore").unlink()
     result = check_R2(_MINIMAL_CAMPAIGN, fully_setup)
     assert not result.passed
     assert result.check_id == "R2"
 
 
 def test_R2_fails_when_entry_missing(fully_setup: Path) -> None:
-    (fully_setup / _ML_DIR / ".gitignore").write_text("*.pyc\n")
+    (fully_setup / ".gitignore").write_text("*.pyc\n")
     result = check_R2(_MINIMAL_CAMPAIGN, fully_setup)
     assert not result.passed
 

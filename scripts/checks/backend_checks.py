@@ -32,11 +32,13 @@ def check_skypilot_installed() -> CheckResult:
                 check_id=check_id,
                 passed=True,
                 message="SkyPilot is installed",
+                category="backend",
             )
         return CheckResult(
             check_id=check_id,
             passed=False,
             message="SkyPilot not found. Install with: pip install skypilot[vast]",
+            category="backend",
             remediation="pip install 'skypilot[vast]'",
         )
     except FileNotFoundError:
@@ -44,6 +46,7 @@ def check_skypilot_installed() -> CheckResult:
             check_id=check_id,
             passed=False,
             message="SkyPilot not found. Install with: pip install skypilot[vast]",
+            category="backend",
             remediation="pip install 'skypilot[vast]'",
         )
     except subprocess.TimeoutExpired:
@@ -51,6 +54,7 @@ def check_skypilot_installed() -> CheckResult:
             check_id=check_id,
             passed=False,
             message="SkyPilot version check timed out",
+            category="backend",
             remediation="pip install 'skypilot[vast]'",
         )
 
@@ -70,11 +74,13 @@ def check_vast_configured() -> CheckResult:
                 check_id=check_id,
                 passed=True,
                 message="Vast.ai configured in SkyPilot",
+                category="backend",
             )
         return CheckResult(
             check_id=check_id,
             passed=False,
             message="Vast.ai cloud not configured in SkyPilot",
+            category="backend",
             remediation="Run: vast set api-key <your_key> && sky check",
         )
     except FileNotFoundError:
@@ -82,6 +88,7 @@ def check_vast_configured() -> CheckResult:
             check_id=check_id,
             passed=False,
             message="Vast.ai cloud not configured in SkyPilot",
+            category="backend",
             remediation="Run: vast set api-key <your_key> && sky check",
         )
     except subprocess.TimeoutExpired:
@@ -89,6 +96,7 @@ def check_vast_configured() -> CheckResult:
             check_id=check_id,
             passed=False,
             message="Vast.ai configuration check timed out",
+            category="backend",
             remediation="Run: vast set api-key <your_key> && sky check",
         )
 
@@ -103,6 +111,7 @@ def check_wandb_credentials(campaign: dict[str, Any]) -> CheckResult:
             check_id=check_id,
             passed=True,
             message="WandB credentials found (WANDB_API_KEY)",
+            category="backend",
         )
 
     # Check ~/.netrc for wandb entry
@@ -115,6 +124,7 @@ def check_wandb_credentials(campaign: dict[str, Any]) -> CheckResult:
                     check_id=check_id,
                     passed=True,
                     message="WandB credentials found (~/.netrc)",
+                    category="backend",
                 )
     except OSError:
         pass
@@ -123,6 +133,7 @@ def check_wandb_credentials(campaign: dict[str, Any]) -> CheckResult:
         check_id=check_id,
         passed=False,
         message="WandB credentials not found",
+        category="backend",
         remediation="Set WANDB_API_KEY or run: wandb login",
     )
 
@@ -142,6 +153,7 @@ def check_repo_access(campaign: dict[str, Any]) -> CheckResult:
             check_id=check_id,
             passed=False,
             message="Cannot access git repo: project.repo not specified in campaign",
+            category="backend",
             remediation="Ensure repo URL is correct and SSH keys or tokens are configured",
         )
 
@@ -156,11 +168,13 @@ def check_repo_access(campaign: dict[str, Any]) -> CheckResult:
                 check_id=check_id,
                 passed=True,
                 message=f"Git repo accessible: {repo_url}",
+                category="backend",
             )
         return CheckResult(
             check_id=check_id,
             passed=False,
             message=f"Cannot access git repo: {repo_url}",
+            category="backend",
             remediation="Ensure repo URL is correct and SSH keys or tokens are configured",
         )
     except FileNotFoundError:
@@ -168,6 +182,7 @@ def check_repo_access(campaign: dict[str, Any]) -> CheckResult:
             check_id=check_id,
             passed=False,
             message=f"Cannot access git repo: {repo_url}",
+            category="backend",
             remediation="Ensure repo URL is correct and SSH keys or tokens are configured",
         )
     except subprocess.TimeoutExpired:
@@ -175,6 +190,7 @@ def check_repo_access(campaign: dict[str, Any]) -> CheckResult:
             check_id=check_id,
             passed=False,
             message=f"Git repo access check timed out: {repo_url}",
+            category="backend",
             remediation="Ensure repo URL is correct and SSH keys or tokens are configured",
         )
 
@@ -233,6 +249,7 @@ def run_all_backend_checks(campaign: dict[str, Any]) -> list[CheckResult]:
                     check_id=check_id,
                     passed=False,
                     message=f"Check raised unexpected error: {exc}",
+                    category="backend",
                     remediation="Review the error and retry",
                 )
             )

@@ -57,7 +57,7 @@ def _scaffold_ready_state(cwd: Path) -> None:
     """Create all dirs and files so repo checks R1-R6 pass."""
     ml_dir = cwd / _STATE_DIR
     ml_dir.mkdir(exist_ok=True)
-    gitignore = ml_dir / ".gitignore"
+    gitignore = cwd / ".gitignore"
     gitignore.write_text(".ml-metaopt/\n")
     for subdir in _ALL_ML_SUBDIRS:
         (ml_dir / subdir).mkdir(parents=True, exist_ok=True)
@@ -66,12 +66,12 @@ def _scaffold_ready_state(cwd: Path) -> None:
 def _mock_backend_all_pass(campaign):
     """Return backend CheckResults where all pass."""
     return [
-        CheckResult("skypilot_installed", True, "SkyPilot is installed"),
-        CheckResult("vast_configured", True, "Vast.ai configured"),
-        CheckResult("wandb_credentials", True, "WandB creds found"),
-        CheckResult("repo_access", True, "Repo accessible"),
+        CheckResult("skypilot_installed", True, message="SkyPilot is installed", category="backend"),
+        CheckResult("vast_configured", True, message="Vast.ai configured", category="backend"),
+        CheckResult("wandb_credentials", True, message="WandB creds found", category="backend"),
+        CheckResult("repo_access", True, message="Repo accessible", category="backend"),
         CheckResult(
-            "smoke_test_command_nonempty", True, "smoke_test_command set",
+            "smoke_test_command_nonempty", True, message="smoke_test_command set",
             category="warning",
         ),
     ]
@@ -82,14 +82,18 @@ def _mock_backend_sky_fails(campaign):
     return [
         CheckResult(
             "skypilot_installed", False,
-            "SkyPilot not found",
+            message="SkyPilot not found",
+            category="backend",
             remediation="pip install 'skypilot[vast]'",
         ),
-        CheckResult("vast_configured", False, "Vast.ai not configured", remediation="Run sky check"),
-        CheckResult("wandb_credentials", True, "WandB creds found"),
-        CheckResult("repo_access", True, "Repo accessible"),
         CheckResult(
-            "smoke_test_command_nonempty", True, "smoke_test_command set",
+            "vast_configured", False, message="Vast.ai not configured",
+            category="backend", remediation="Run sky check",
+        ),
+        CheckResult("wandb_credentials", True, message="WandB creds found", category="backend"),
+        CheckResult("repo_access", True, message="Repo accessible", category="backend"),
+        CheckResult(
+            "smoke_test_command_nonempty", True, message="smoke_test_command set",
             category="warning",
         ),
     ]
@@ -125,11 +129,11 @@ def test_bootstrap_creates_ml_dir(mock_backend, tmp_path: Path) -> None:
     """Missing subdirs: bootstrap creates them → READY after bootstrap."""
     mock_backend.side_effect = _mock_backend_all_pass
     campaign_file = _write_campaign(tmp_path)
-    # Create .ml-metaopt/ and its .gitignore (R2 requires it) but NOT subdirs.
+    # Create .ml-metaopt/ and root .gitignore (R2 requires it) but NOT subdirs.
     # Bootstrap B2 will create the subdirs, fixing R3-R6.
     ml_dir = tmp_path / _STATE_DIR
     ml_dir.mkdir()
-    (ml_dir / ".gitignore").write_text(".ml-metaopt/\n")
+    (tmp_path / ".gitignore").write_text(".ml-metaopt/\n")
 
     exit_code = run_preflight(campaign_file, tmp_path)
 
@@ -219,10 +223,10 @@ def test_bootstrapped_count_positive(mock_backend, tmp_path: Path) -> None:
     """checks_summary.bootstrapped > 0 when bootstrap fixed something."""
     mock_backend.side_effect = _mock_backend_all_pass
     campaign_file = _write_campaign(tmp_path)
-    # Create .ml-metaopt/.gitignore only; subdirs missing → bootstrap fixes them
+    # Create .ml-metaopt/ and root .gitignore only; subdirs missing → bootstrap fixes them
     ml_dir = tmp_path / _STATE_DIR
     ml_dir.mkdir()
-    (ml_dir / ".gitignore").write_text(".ml-metaopt/\n")
+    (tmp_path / ".gitignore").write_text(".ml-metaopt/\n")
 
     exit_code = run_preflight(campaign_file, tmp_path)
 
@@ -262,13 +266,13 @@ def test_warnings_do_not_block_ready(mock_backend, tmp_path: Path) -> None:
     """Warning-category failures don't block READY status."""
     def backend_with_warning(campaign):
         return [
-            CheckResult("skypilot_installed", True, "SkyPilot is installed"),
-            CheckResult("vast_configured", True, "Vast.ai configured"),
-            CheckResult("wandb_credentials", True, "WandB creds found"),
-            CheckResult("repo_access", True, "Repo accessible"),
+            CheckResult("skypilot_installed", True, message="SkyPilot is installed", category="backend"),
+            CheckResult("vast_configured", True, message="Vast.ai configured", category="backend"),
+            CheckResult("wandb_credentials", True, message="WandB creds found", category="backend"),
+            CheckResult("repo_access", True, message="Repo accessible", category="backend"),
             CheckResult(
                 "smoke_test_command_nonempty", False,
-                "smoke_test_command not set",
+                message="smoke_test_command not set",
                 category="warning",
                 remediation="Set project.smoke_test_command",
             ),
