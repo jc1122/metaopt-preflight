@@ -24,7 +24,7 @@ _STATE_DIR = ".ml-metaopt"
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _CAMPAIGN = {
-    "campaign_name": "test-campaign",
+    "campaign": {"name": "test-campaign"},
     "objective": {
         "metric": "val_loss",
         "direction": "minimize",
@@ -34,19 +34,12 @@ _CAMPAIGN = {
         "project": "test-project",
     },
     "compute": {
-        "cloud": "vast",
-        "instance_type": "A100",
+        "provider": "vast_ai",
+        "accelerator": "A100:1",
     },
     "project": {
         "repo": "https://github.com/test/repo",
         "smoke_test_command": "python -c \"print('ok')\"",
-    },
-    "search_space": {
-        "learning_rate": {
-            "type": "log_uniform",
-            "min": 1e-4,
-            "max": 1e-2,
-        },
     },
 }
 
@@ -330,10 +323,10 @@ def test_malformed_yaml_exit_2(tmp_path):
 
 
 @mock.patch("scripts.run_preflight.run_all_backend_checks")
-def test_missing_campaign_name_r8_fails_exit_1(mock_backend, make_project):
-    """12. Campaign YAML missing campaign_name → R8 fails → exit 1 (not 2)."""
+def test_missing_campaign_key_r8_fails_exit_1(mock_backend, make_project):
+    """12. Campaign YAML missing 'campaign' key → R8 fails → exit 1 (not 2)."""
     mock_backend.side_effect = _fresh_backend_pass
-    incomplete = {k: v for k, v in _CAMPAIGN.items() if k != "campaign_name"}
+    incomplete = {k: v for k, v in _CAMPAIGN.items() if k != "campaign"}
     cwd, cf = make_project(campaign=incomplete)
 
     rc = main(["--campaign", str(cf), "--cwd", str(cwd)])
@@ -383,8 +376,7 @@ def test_changed_identity_field_different_hash(mock_backend, tmp_path):
     """14. Changed identity field → different campaign_identity_hash.
 
     NOTE: The identity hash uses objective.metric (via _get_nested),
-    so changing it produces a different hash.  Flat ``campaign_name``
-    is NOT in the identity hash (it uses ``campaign.name`` nested).
+    so changing it produces a different hash.
     """
     mock_backend.side_effect = _fresh_backend_pass
 

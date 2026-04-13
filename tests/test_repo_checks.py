@@ -23,7 +23,7 @@ from scripts.checks.repo_checks import (
 # ── Helpers ──────────────────────────────────────────────────────────
 
 _MINIMAL_CAMPAIGN: dict = {
-    "campaign_name": "test-campaign",
+    "campaign": {"name": "test-campaign"},
     "objective": {"metric": "val/accuracy", "direction": "maximize"},
     "wandb": {"entity": "test", "project": "test"},
     "compute": {"provider": "vast_ai"},
@@ -31,7 +31,6 @@ _MINIMAL_CAMPAIGN: dict = {
         "repo": "git@github.com:org/repo.git",
         "smoke_test_command": "python train.py --smoke",
     },
-    "search_space": {"learning_rate": {"min": 1e-4, "max": 1e-1}},
 }
 
 _ML_DIR = ".ml-metaopt"
@@ -200,7 +199,7 @@ def test_R7_fails_when_project_section_missing(fully_setup: Path) -> None:
 
 @pytest.mark.parametrize(
     "missing_key",
-    ["campaign_name", "objective", "wandb", "compute", "project", "search_space"],
+    ["campaign", "objective", "wandb", "compute", "project"],
 )
 def test_R8_fails_when_key_absent(fully_setup: Path, missing_key: str) -> None:
     campaign = {k: v for k, v in _MINIMAL_CAMPAIGN.items() if k != missing_key}

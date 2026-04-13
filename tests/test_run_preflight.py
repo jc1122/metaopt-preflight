@@ -18,7 +18,6 @@ _STATE_DIR = ".ml-metaopt"
 
 _VALID_CAMPAIGN = {
     "campaign": {"name": "test-campaign", "description": "test"},
-    "campaign_name": "test-campaign",
     "objective": {"metric": "val/accuracy", "direction": "maximize", "improvement_threshold": 0.005},
     "wandb": {"entity": "test-entity", "project": "test-project"},
     "compute": {
@@ -31,7 +30,6 @@ _VALID_CAMPAIGN = {
         "repo": "git@github.com:org/repo.git",
         "smoke_test_command": "python train.py --smoke",
     },
-    "search_space": {"learning_rate": {"min": 1e-4, "max": 1e-1}},
 }
 
 _ALL_ML_SUBDIRS = [

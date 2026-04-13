@@ -18,7 +18,7 @@ class CheckResult:
 
 
 REQUIRED_TOP_LEVEL_KEYS = frozenset(
-    {"campaign_name", "objective", "wandb", "compute", "project", "search_space"}
+    {"campaign", "project", "wandb", "compute", "objective"}
 )
 
 _ML_METAOPT_DIR = ".ml-metaopt"
