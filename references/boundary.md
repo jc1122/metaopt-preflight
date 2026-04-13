@@ -196,6 +196,27 @@ metaopt-preflight                     ml-metaoptimization
 - Preflight never invokes the orchestrator.
 - There is no runtime coupling beyond the artifact file.
 
+### Campaign-change detection via identity hash
+
+The readiness artifact includes a `campaign_identity_hash` computed from
+campaign-identifying fields. This hash serves as a **campaign-change
+detector** for the orchestrator: at `LOAD_CAMPAIGN`, the orchestrator
+independently computes the same hash and compares it to the artifact's value.
+If the campaign YAML was edited after preflight ran (changing name, objective,
+or WandB target), the hashes will not match and the orchestrator emits
+`BLOCKED_CONFIG: "Campaign config changed since last preflight — re-run
+metaopt-preflight"`. The same mismatch check occurs at `HYDRATE_STATE` when
+resuming an existing campaign.
+
+This does not give preflight resume semantics — it remains a one-shot skill
+with no persisted state of its own. The hash is simply an artifact field that
+the orchestrator uses to detect staleness without re-running preflight.
+
+> **Note:** The readiness artifact also includes `runtime_config_hash`.
+> In v4, only `campaign_identity_hash` is validated by the orchestrator.
+> `runtime_config_hash` is defined and emitted for forward compatibility but
+> is not checked at `LOAD_CAMPAIGN` or `HYDRATE_STATE`.
+
 ## Deferred specifications
 
 The following are referenced in this document but intentionally deferred to

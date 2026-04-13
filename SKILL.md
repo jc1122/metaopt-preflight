@@ -10,7 +10,7 @@ description: >
 ## Overview
 
 **Lane type:** standalone / one-shot
-**Model class:** to be determined
+**Model class:** strong_reasoner
 **State mutation:** bounded idempotent bootstrap mutations only (detailed boundaries TBD)
 
 This skill is a **one-shot preflight phase** that runs before the
@@ -100,11 +100,35 @@ remediated externally.
 
 ## Input contract
 
-<!-- To be defined in later tasks -->
+### Campaign file — `ml_metaopt_campaign.yaml`
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| TBD | — | — | — |
+Preflight reads the campaign file for existence, basic structure, and the
+fields needed to compute artifact hashes and scope readiness checks. It does
+**not** perform full schema validation (that is `LOAD_CAMPAIGN`'s job).
+
+| Field path | Used for |
+|------------|----------|
+| `campaign.name` | Campaign identifier; included in `campaign_identity_hash` |
+| `objective.metric` | Included in `campaign_identity_hash` |
+| `objective.direction` | Included in `campaign_identity_hash` |
+| `wandb.entity` | WandB connectivity check; included in `campaign_identity_hash` |
+| `wandb.project` | WandB connectivity check; included in `campaign_identity_hash` |
+| `project.repo` | Repository structure validation |
+| `project.smoke_test_command` | Smoke-test availability check (if declared) |
+| `compute.*` | Backend/delegation infrastructure readiness checks |
+
+### Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WANDB_API_KEY` (or active `wandb login` session) | Yes | WandB authentication for connectivity check |
+| SkyPilot configuration (`~/.sky/`) | Yes | Backend delegation infrastructure credentials |
+
+### Runtime (implicit)
+
+Preflight runs within the agent runtime provided by the caller. It does not
+declare an explicit runtime dependency — any agent model/runtime that can
+execute shell commands and read/write files is sufficient.
 
 ## Output contract
 
@@ -132,10 +156,21 @@ Key fields:
 failed — `failures` contains actionable details.
 
 **Freshness model:** The orchestrator verifies binding freshness cheaply by
-checking that the artifact's `campaign_identity_hash` and
-`runtime_config_hash` match its own computed values. Operational conditions
+checking that the artifact's `campaign_identity_hash` matches its own
+computed value. If the campaign YAML is edited after preflight ran (changing
+name, objective, or WandB target), the hash will not match and the
+orchestrator will emit `BLOCKED_CONFIG` requiring a preflight rerun.
+`runtime_config_hash` is included in the artifact for forward compatibility
+but is **not validated by v4** of the orchestrator. Operational conditions
 (backend reachability, dependency availability) are point-in-time and cannot
 be re-verified without re-running preflight.
+
+> **Authoritative hash definition:** The `campaign_identity_hash` computation
+> is defined by `ml-metaoptimization/scripts/load_campaign_handoff.py::_identity_hash()`.
+> It extracts only specific subfields — `campaign.name`, `objective.metric`,
+> `objective.direction`, `wandb.entity`, `wandb.project` — not the entire
+> top-level blocks as the prose in `contracts.md` Section 4 might suggest.
+> Preflight must use the same subfields to produce a matching hash.
 
 **Overwrite semantics:** Each invocation overwrites any prior artifact. The
 latest on disk is always authoritative.
