@@ -98,6 +98,21 @@ remediated externally.
   stateless, re-invocation after external remediation or environment changes
   is the intended recovery path.
 
+## Invocation
+
+```bash
+python3 -m scripts.run_preflight --campaign path/to/campaign.yaml [--cwd /project/root]
+```
+
+Exit codes: `0` = READY, `1` = FAILED, `2` = usage/input error.
+
+### CLI arguments
+
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `--campaign` | Yes | — | Path to campaign YAML file |
+| `--cwd` | No | `.` | Project root directory |
+
 ## Input contract
 
 ### Campaign file — `ml_metaopt_campaign.yaml`
@@ -146,6 +161,7 @@ Key fields:
 | `campaign_identity_hash` | string | Campaign identity hash (`sha256:…`), matching the definition in `ml-metaoptimization/references/contracts.md`. |
 | `runtime_config_hash` | string | Runtime config hash (`sha256:…`), matching the definition in `ml-metaoptimization/references/contracts.md`. |
 | `emitted_at` | string | ISO 8601 timestamp of artifact emission. |
+| `preflight_duration_seconds` | number | Wall-clock duration of the preflight invocation in seconds. |
 | `checks_summary` | object | Aggregate counts: `total`, `passed`, `failed`, `bootstrapped`, `warnings`. |
 | `failures` | array | Failure records with `check_id`, `category`, `message`, `remediation`. Empty when `READY`. |
 | `next_action` | string | `"proceed"` when `READY`; remediation guidance when `FAILED`. |
