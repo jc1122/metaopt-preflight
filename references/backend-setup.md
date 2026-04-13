@@ -1,126 +1,107 @@
 # Backend Setup Contract
 
-Authoritative reference for how `metaopt-preflight` configures and validates
-backend readiness before an `ml-metaoptimization` campaign begins.
+Authoritative reference for how `metaopt-preflight` evaluates and bootstraps
+backend readiness before an `ml-metaoptimization` v4 campaign begins.
 
 ## Ownership model
 
-Backend setup spans three layers. Each layer has a distinct role; preflight
-coordinates but does not absorb responsibilities that belong elsewhere.
+Backend responsibilities are split between preflight (readiness evaluation)
+and the runtime worker (execution). There is no delegation layer between them.
 
 | Layer | Role in backend setup |
 |-------|----------------------|
-| **`metaopt-preflight`** | Orchestrates readiness evaluation and bounded bootstrap. Decides whether the backend is ready. Emits the readiness artifact. |
-| **`hetzner-delegation`** | Delegation-first control layer. Owns cluster lifecycle actions (status, bootstrap, validate, sync, cleanup). Preflight delegates to it rather than invoking raw Hetzner/Ray commands. |
-| **`ray-hetzner`** | Execution backend/runtime. Owns the queue infrastructure (`metaopt/` commands), cluster scripts, and server state. Preflight never modifies `ray-hetzner` internals directly. |
-| **`ml-metaoptimization`** | Downstream consumer. Interacts with the backend exclusively through the `remote_queue` contract (`enqueue_command`, `status_command`, `results_command`). Assumes backend is ready at campaign start. |
+| **`metaopt-preflight`** | Evaluates whether the execution environment has the prerequisites for a campaign: SkyPilot installed and configured for Vast.ai, WandB credentials available, project repo accessible. Performs bounded environment-level bootstrap when possible. Emits the readiness artifact. |
+| **`skypilot-wandb-worker`** | Leaf execution worker dispatched by the orchestrator at runtime. Owns all SkyPilot and WandB API operations: sweep creation, `sky launch` on Vast.ai, sweep polling with watchdog, smoke tests. Never invoked by preflight. |
+| **`ml-metaoptimization`** | Orchestrator. Dispatches `skypilot-wandb-worker` via directives. Consumes the readiness artifact to gate campaign entry at `LOAD_CAMPAIGN`. Assumes backend prerequisites are satisfied when the artifact says `READY`. |
 
-**Key principle:** `metaopt-preflight` owns the *decision* of whether the
-backend is ready. It delegates *actions* to `hetzner-delegation` and validates
-*state* exposed by `ray-hetzner`. It never bypasses the delegation layer to
-perform raw Hetzner administration.
+**Key principle:** preflight owns the *decision* of whether the environment
+can support a campaign. It does not provision compute, create sweeps, or
+manage any runtime backend lifecycle — all of that belongs to
+`skypilot-wandb-worker` at runtime.
 
-## Supported backend path
+## Backend technology
 
-The current implementation supports exactly one backend path:
+The v4 backend uses:
 
-```
-metaopt-preflight
-  └─ delegates to ─→ hetzner-delegation
-                        └─ manages ─→ ray-hetzner (cluster + queue)
-```
+- **SkyPilot** — cloud orchestration layer. Launches ephemeral GPU instances
+  via `sky launch` on **Vast.ai**. Instances self-terminate via
+  `--idle-minutes-to-autostop`. There is no persistent cluster or head node.
+- **WandB API** — sweep creation and monitoring. The worker creates sweeps via
+  `wandb sweep`, launches WandB agents on SkyPilot instances, and polls sweep
+  status through the WandB Python API.
+- **No persistent infrastructure** — no Ray cluster, no Hetzner servers, no
+  queue directories, no head node. Every compute instance is ephemeral and
+  managed by SkyPilot.
 
-### How the relationship works
-
-1. **Preflight invokes `hetzner-delegation` capabilities** — cluster status
-   checks, bootstrap sequencing, and queue validation — using the delegation
-   skill's documented interface. Preflight does not shell out to raw `hcloud`
-   or SSH commands.
-
-2. **`hetzner-delegation` translates to `ray-hetzner` scripts** — it calls
-   `ray-hetzner` lifecycle scripts (`status.sh`, `setup_head.sh`,
-   `build_base_snapshot.sh`, etc.) and queue commands (`enqueue_batch.py`,
-   `get_batch_status.py`) as documented in the `ray-hetzner` README.
-
-3. **Preflight interprets results** — the output from delegation calls
-   (cluster state, queue response, error messages) is evaluated against the
-   readiness conditions defined below. Preflight maps these to pass/fail
-   check results in the readiness artifact.
-
-### Extensibility
-
-The backend path is not pluggable in the current implementation. If a second
-backend is added in the future, the readiness conditions and bootstrap actions
-should be defined in a separate backend-specific contract, and preflight
-should route to the appropriate contract based on the campaign spec's
-`remote_queue` configuration. This extensibility is out of scope for now.
-
-## Backend readiness conditions
+## Backend readiness checks
 
 Preflight evaluates backend readiness through a set of checks. These checks
 establish a **minimal ready state** — the minimum conditions under which
-`ml-metaoptimization` can safely start its campaign loop and expect the
-`remote_queue` contract to function.
+`ml-metaoptimization` can safely start its campaign loop and expect
+`skypilot-wandb-worker` operations to succeed.
 
-### Minimal ready state (required before campaign start)
+### Check catalog
 
 | Check | What it verifies | How verified |
 |-------|-----------------|--------------|
-| **Delegation prerequisites** | `hcloud` CLI authenticated, `config.env` populated, `ssh`/`rsync`/`jq` available | Delegate to `hetzner-delegation` prerequisite validation |
-| **Head node reachable** | Cluster head is running and SSH-accessible | Delegate to `hetzner-delegation` cluster status check |
-| **Queue infrastructure operational** | The `metaopt/` queue directories exist on the head node and queue commands respond | Invoke a no-op or status probe through the delegation layer (e.g., `get_batch_status.py` with a non-existent batch returns a well-formed error, not a crash) |
-| **Queue commands available** | `enqueue_command`, `status_command`, `results_command` as declared in the campaign spec resolve to executable paths on the head node | Verify command availability through the delegation layer |
-| **Network/credential validity** | SSH keys accepted, API tokens valid, private network functional | Implicit in head-reachability and delegation prerequisite checks |
+| **SkyPilot installed** | `sky` CLI is available on PATH | Check that `sky` command resolves |
+| **Vast.ai configured** | SkyPilot can reach the Vast.ai provider | Run `sky check` and verify Vast.ai is listed as enabled |
+| **WandB credentials** | WandB API access is configured | Check that `WANDB_API_KEY` environment variable is set, or that `~/.netrc` contains a `wandb.ai` entry (indicating `wandb login` was run) |
+| **Project repo accessible** | `project.repo` git URL can be reached | Verify git credentials allow access (e.g., `git ls-remote` against the URL) |
+| **Smoke test command present** | `project.smoke_test_command` is syntactically non-empty | Verify the field is a non-empty string in the campaign spec. Preflight does NOT execute the command — execution happens during `LOCAL_SANITY` at runtime via `skypilot-wandb-worker` |
 
 All checks in this table must pass for the readiness artifact to emit
 `status: "READY"`. Failure of any check produces `status: "FAILED"` with
 an actionable `failures` entry.
 
-### What is NOT part of minimal ready state
+### What is NOT part of backend readiness
 
-The following are **operational/capacity concerns** that belong to the
-campaign runtime or to explicit scaling requests — not to preflight:
+The following are **runtime/capacity concerns** that belong to the campaign
+execution loop — not to preflight:
 
-- **Worker count or autoscaling policy** — preflight does not verify that a
-  specific number of workers are running. The head node is sufficient for
-  queue readiness; worker scaling is a runtime concern managed by
-  `hetzner-delegation` or the operator during the campaign.
-- **GPU/resource availability** — preflight does not probe hardware resources
-  beyond basic head reachability.
-- **Queue drain state** — preflight does not check whether prior batches
-  are still running or queued. Queue lifecycle is the orchestrator's concern.
-- **Code sync freshness** — preflight may verify that sync *can* work, but
-  does not push a specific code version. The orchestrator or delegation layer
-  handles sync at experiment time.
-- **Daemon process state** — preflight verifies that queue *commands* respond,
-  not that `head_daemon.py` is actively running. The daemon is a runtime
-  operational concern.
+- **GPU availability or pricing** — preflight does not probe whether the
+  requested accelerator (e.g., `A100:1`) is currently available on Vast.ai.
+  Availability is transient and checked by SkyPilot at launch time.
+- **WandB project/entity existence** — preflight verifies credentials but
+  does not create the WandB project or validate entity permissions. The
+  worker handles project creation implicitly via `wandb sweep`.
+- **Sweep creation or management** — sweep lifecycle is owned entirely by
+  `skypilot-wandb-worker` at runtime.
+- **SkyPilot cluster provisioning** — there are no persistent clusters to
+  provision. `sky launch` creates ephemeral instances on demand.
+- **Budget enforcement** — spend tracking and budget caps are enforced during
+  `poll_sweep` at runtime, not during preflight.
 
-## Allowed bootstrap actions
+## Bootstrap mutations
 
-When a readiness check fails due to a missing but provisionable prerequisite,
-preflight MAY perform a bounded idempotent bootstrap action through the
-delegation layer. All bootstrap actions must satisfy the constraints in
-`references/boundary.md` § Bootstrap mutations.
+When a readiness check fails due to a missing but installable prerequisite,
+preflight MAY perform a bounded idempotent bootstrap action. All bootstrap
+actions must satisfy the constraints in `references/boundary.md` § Bootstrap
+mutations.
 
-| Condition | Bootstrap action | Delegation target |
-|-----------|-----------------|-------------------|
-| Head node not running | Request cluster bootstrap (build snapshot if needed, set up head) | `hetzner-delegation` cluster bootstrap flow |
-| Queue directories missing on head | Request queue infrastructure setup | `hetzner-delegation` → `ray-hetzner` queue setup |
-| `config.env` incomplete but derivable | Populate missing fields from environment/defaults | Local file operation (no delegation needed) |
+In v4, backend bootstrap is limited to **environment-level prerequisites**.
+There is no remote infrastructure to provision (no cluster, no queue
+directories, no head node).
+
+| Condition | Bootstrap action |
+|-----------|-----------------|
+| `sky` not on PATH | Advise installation of SkyPilot (`pip install skypilot[vastai]`). Preflight MAY attempt the install if the Python environment is writable. |
+| Vast.ai not configured in SkyPilot | Advise running `sky check` setup flow. Preflight records the failure with remediation instructions. |
+| `WANDB_API_KEY` missing and `wandb login` not run | Advise setting the environment variable or running `wandb login`. Preflight MAY prompt for the key if running interactively. |
+| `project.repo` inaccessible | Advise configuring SSH keys or HTTPS credentials for the git URL. No automated bootstrap — credential setup requires user action. |
 
 ### Bootstrap constraints
 
 - **Idempotent.** Re-running a bootstrap action against an already-ready
-  backend is a no-op.
-- **Delegation-mediated.** Bootstrap actions that touch remote infrastructure
-  go through `hetzner-delegation`, never through raw `hcloud`/SSH.
-- **Bounded.** Bootstrap does not add workers, tune autoscaling, modify
-  experiment code, or alter campaign state. It brings infrastructure to
+  environment is a no-op.
+- **Environment-scoped.** Bootstrap actions are limited to local tool
+  installation and credential verification. Preflight never provisions remote
+  compute or creates cloud resources.
+- **Bounded.** Bootstrap does not modify experiment code, campaign state,
+  WandB projects, or SkyPilot clusters. It brings the local environment to
   minimal ready state only.
-- **Fail-fast.** If a bootstrap action fails (e.g., `hcloud` auth invalid,
-  snapshot build error), preflight records the failure and emits
-  `status: "FAILED"` — it does not retry.
+- **Fail-fast.** If a bootstrap action fails, preflight records the failure
+  and emits `status: "FAILED"` — it does not retry.
 
 After bootstrap, preflight re-evaluates the affected readiness checks. If
 they now pass, the bootstrap is considered successful.
@@ -137,7 +118,7 @@ Backend checks map to the readiness artifact as follows:
 - **`failures[]`** entries for backend checks use `category: "backend"` and
   include `check_id`, a human-readable `message`, and a `remediation` hint.
 - **`diagnostics`** may include notes on bootstrap actions taken
-  (e.g., "cluster bootstrapped via hetzner-delegation").
+  (e.g., "installed SkyPilot via pip").
 
 Freshness considerations: backend readiness is a **Tier 2 (operational)**
 signal — it reflects a point-in-time check that cannot be re-verified by
@@ -145,24 +126,42 @@ hash comparison alone. If the orchestrator suspects backend state has changed
 since preflight ran, re-invocation is the correct response.
 See `references/readiness-artifact.md` § Freshness tiers.
 
+## `runtime_config_hash`
+
+The readiness artifact includes a `runtime_config_hash` field. In v4 this
+hash covers `compute`, `wandb`, `project.repo`, and
+`project.smoke_test_command` from the campaign spec.
+
+Preflight computes this hash using the same canonicalization rules as
+`ml-metaoptimization` (see `ml-metaoptimization/references/contracts.md`
+§ Identity Hash Computation). The orchestrator uses it for binding freshness
+— verifying that the environment preflight checked matches the campaign
+configuration the orchestrator is about to run.
+
+**Current status:** v4 does not validate `runtime_config_hash` at campaign
+entry. The field is emitted by preflight and reserved for v5+ orchestrator
+validation. Preflight must still compute and include it so the artifact
+schema is forward-compatible.
+
 ## Out of scope
 
 The following topics are explicitly outside this contract:
 
 | Topic | Where it belongs |
 |-------|-----------------|
-| Raw Hetzner server administration (firewall rules, DNS, billing) | Operator / `hcloud` directly |
-| Detailed cluster lifecycle management (add/remove workers, autoscaling) | `hetzner-delegation` at campaign runtime |
-| Experiment execution, result collection, batch monitoring | `ml-metaoptimization` via `remote_queue` contract |
+| SkyPilot cluster creation (`sky launch`) | `skypilot-wandb-worker` at runtime |
+| WandB sweep creation and monitoring | `skypilot-wandb-worker` at runtime |
+| Budget tracking and spend caps | `skypilot-wandb-worker` `poll_sweep` operation |
+| Smoke test execution | `skypilot-wandb-worker` `run_smoke_test` operation (via `LOCAL_SANITY`) |
+| Instance lifecycle (autostop, crash recovery) | `skypilot-wandb-worker` + SkyPilot autostop |
 | Repository setup and validation (file structure, dependencies, campaign file) | `references/repo-setup.md` |
-| Full readiness check catalog with exact check IDs | Future check-catalog reference |
 | Failure taxonomy and retry semantics | `references/readiness-artifact.md` for artifact schema; `ml-metaoptimization` for retry policy |
-| Second backend implementations | Future extensibility; one backend path for now |
 
 ## References
 
 - `references/boundary.md` — ownership boundary, lifecycle phases, mutation constraints
 - `references/readiness-artifact.md` — artifact schema, freshness tiers, consumption protocol
-- `hetzner-delegation/SKILL.md` — delegation skill contract and cluster lifecycle
-- `ray-hetzner/README.md` — execution backend, queue infrastructure, command reference
-- `ml-metaoptimization/references/backend-contract.md` — orchestrator's `remote_queue` contract
+- `ml-metaoptimization/references/backend-contract.md` — worker operations contract (launch_sweep, poll_sweep, run_smoke_test)
+- `ml-metaoptimization/references/dependencies.md` — environment dependencies and campaign YAML validation rules
+- `ml-metaoptimization/references/contracts.md` — state schema, identity hash, `runtime_config_hash` definition
+- `ml-metaoptimization/.github/agents/skypilot-wandb-worker.agent.md` — leaf worker that drives SkyPilot/WandB at runtime
