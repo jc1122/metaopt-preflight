@@ -166,3 +166,47 @@ def test_run_all_B1_fails_B3_still_runs(tmp_path: Path) -> None:
     b1 = [r for r in results if r.mutation_id == "B1"][0]
     assert b1.applied is False
     assert b1.already_ok is False
+
+
+def test_B3_permission_error_when_creating_new_gitignore(tmp_path: Path) -> None:
+    """B3 returns error when .gitignore doesn't exist and dir is read-only."""
+    tmp_path.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        result = bootstrap_B3(tmp_path)
+        assert result.mutation_id == "B3"
+        assert result.applied is False
+        assert result.already_ok is False
+        assert "Cannot write .gitignore" in result.message
+    finally:
+        tmp_path.chmod(stat.S_IRWXU)
+
+
+def test_run_all_B2_exception_caught(tmp_path: Path) -> None:
+    """Exception in B2 is caught and B3 still runs."""
+    (tmp_path / ".ml-metaopt").mkdir()
+    with patch(
+        "scripts.bootstrap.repo_bootstrap.bootstrap_B2",
+        side_effect=RuntimeError("B2 exploded"),
+    ):
+        results = run_all_repo_bootstrap(tmp_path)
+    mutation_ids = [r.mutation_id for r in results]
+    assert "B1" in mutation_ids
+    assert "B2" in mutation_ids
+    assert "B3" in mutation_ids
+    b2 = [r for r in results if r.mutation_id == "B2"][0]
+    assert b2.applied is False
+    assert "B2 failed" in b2.message
+
+
+def test_run_all_B3_exception_caught(tmp_path: Path) -> None:
+    """Exception in B3 is caught gracefully."""
+    with patch(
+        "scripts.bootstrap.repo_bootstrap.bootstrap_B3",
+        side_effect=RuntimeError("B3 exploded"),
+    ):
+        results = run_all_repo_bootstrap(tmp_path)
+    mutation_ids = [r.mutation_id for r in results]
+    assert "B3" in mutation_ids
+    b3 = [r for r in results if r.mutation_id == "B3"][0]
+    assert b3.applied is False
+    assert "B3 failed" in b3.message

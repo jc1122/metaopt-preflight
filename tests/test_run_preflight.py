@@ -299,3 +299,59 @@ def test_main_cli_interface(mock_backend, tmp_path: Path) -> None:
     exit_code = main(["--campaign", str(campaign_file), "--cwd", str(tmp_path)])
 
     assert exit_code == 0
+
+
+# ── Test: flat campaign_name extraction ──────────────────────────────
+
+
+@mock.patch("scripts.run_preflight.run_all_backend_checks")
+def test_flat_campaign_name_used_when_nested_missing(mock_backend, tmp_path: Path) -> None:
+    """campaign_name (flat key) is used when campaign.name is absent."""
+    mock_backend.side_effect = _mock_backend_all_pass
+    flat_campaign = {
+        "campaign_name": "flat-test-campaign",
+        "campaign": {"description": "test"},
+        "objective": {"metric": "val/accuracy", "direction": "maximize", "improvement_threshold": 0.005},
+        "wandb": {"entity": "test-entity", "project": "test-project"},
+        "compute": {
+            "provider": "vast_ai",
+            "accelerator": "A100:1",
+            "num_sweep_agents": 4,
+            "max_budget_usd": 10,
+        },
+        "project": {
+            "repo": "git@github.com:org/repo.git",
+            "smoke_test_command": "python train.py --smoke",
+        },
+    }
+    campaign_file = _write_campaign(tmp_path, flat_campaign)
+    _scaffold_ready_state(tmp_path)
+
+    exit_code = run_preflight(campaign_file, tmp_path)
+
+    assert exit_code == 0
+    artifact = json.loads(
+        (tmp_path / _STATE_DIR / ARTIFACT_FILENAME).read_text()
+    )
+    assert artifact["campaign_id"] == "flat-test-campaign"
+
+
+# ── Test: bootstrap exception handling ───────────────────────────────
+
+
+@mock.patch("scripts.run_preflight.run_all_backend_checks")
+@mock.patch("scripts.run_preflight.run_all_repo_bootstrap")
+def test_bootstrap_exception_logged_as_diagnostic(
+    mock_bootstrap, mock_backend, tmp_path: Path
+) -> None:
+    """Exception during bootstrap is caught and added to diagnostics."""
+    mock_backend.side_effect = _mock_backend_all_pass
+    mock_bootstrap.side_effect = RuntimeError("bootstrap exploded")
+    campaign_file = _write_campaign(tmp_path)
+    # Create .gitignore but NOT .ml-metaopt dir so repo checks fail → triggers bootstrap
+    (tmp_path / ".gitignore").write_text(".ml-metaopt/\n")
+
+    exit_code = run_preflight(campaign_file, tmp_path)
+
+    # Should still complete (status depends on re-check) without crashing
+    assert exit_code in (0, 1)

@@ -200,6 +200,56 @@ class TestTimeoutHandling(unittest.TestCase):
 # ── Aggregate runner ────────────────────────────────────────────────────
 
 
+class TestCheckVastConfiguredFileNotFound(unittest.TestCase):
+    @mock.patch("scripts.checks.backend_checks.subprocess.run")
+    def test_fails_when_sky_binary_not_found(self, mock_run: mock.MagicMock) -> None:
+        mock_run.side_effect = FileNotFoundError("sky not found")
+        result = check_vast_configured()
+        self.assertFalse(result.passed)
+        self.assertEqual(result.check_id, "vast_configured")
+        self.assertIn("not configured", result.message.lower())
+
+
+class TestCheckWandbNetrcOSError(unittest.TestCase):
+    @mock.patch.dict("os.environ", {}, clear=True)
+    @mock.patch("scripts.checks.backend_checks.Path.home")
+    def test_falls_through_on_oserror_reading_netrc(
+        self, mock_home: mock.MagicMock
+    ) -> None:
+        fake_home = Path("/fake/home")
+        mock_home.return_value = fake_home
+        with mock.patch.object(Path, "is_file", side_effect=OSError("disk error")):
+            result = check_wandb_credentials(SAMPLE_CAMPAIGN)
+        self.assertFalse(result.passed)
+        self.assertIn("not found", result.message.lower())
+
+
+class TestCheckRepoAccessMissingUrl(unittest.TestCase):
+    def test_fails_when_repo_url_empty(self) -> None:
+        campaign: dict = {"project": {"repo": ""}}
+        result = check_repo_access(campaign)
+        self.assertFalse(result.passed)
+        self.assertIn("not specified", result.message.lower())
+
+    def test_fails_when_project_missing(self) -> None:
+        campaign: dict = {"wandb": {"entity": "e"}}
+        result = check_repo_access(campaign)
+        self.assertFalse(result.passed)
+        self.assertIn("not specified", result.message.lower())
+
+
+class TestCheckRepoAccessFileNotFound(unittest.TestCase):
+    @mock.patch("scripts.checks.backend_checks.subprocess.run")
+    def test_fails_when_git_binary_not_found(self, mock_run: mock.MagicMock) -> None:
+        mock_run.side_effect = FileNotFoundError("git not found")
+        result = check_repo_access(SAMPLE_CAMPAIGN)
+        self.assertFalse(result.passed)
+        self.assertIn("cannot access", result.message.lower())
+
+
+# ── Aggregate runner ────────────────────────────────────────────────────
+
+
 class TestRunAllBackendChecks(unittest.TestCase):
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     @mock.patch.dict("os.environ", {"WANDB_API_KEY": "key"})
@@ -215,6 +265,33 @@ class TestRunAllBackendChecks(unittest.TestCase):
         self.assertIn("wandb_credentials", ids)
         self.assertIn("repo_access", ids)
         self.assertIn("smoke_test_command_nonempty", ids)
+
+    @mock.patch("scripts.checks.backend_checks.check_smoke_test_command_nonempty")
+    @mock.patch("scripts.checks.backend_checks.check_repo_access")
+    @mock.patch("scripts.checks.backend_checks.check_wandb_credentials")
+    @mock.patch("scripts.checks.backend_checks.check_vast_configured")
+    @mock.patch("scripts.checks.backend_checks.check_skypilot_installed")
+    def test_catches_unexpected_exception(
+        self,
+        mock_sky: mock.MagicMock,
+        mock_vast: mock.MagicMock,
+        mock_wandb: mock.MagicMock,
+        mock_repo: mock.MagicMock,
+        mock_smoke: mock.MagicMock,
+    ) -> None:
+        from scripts.checks.backend_checks import CheckResult as CR
+
+        mock_sky.side_effect = RuntimeError("boom")
+        mock_vast.return_value = CR("vast_configured", True, message="ok", category="backend")
+        mock_wandb.return_value = CR("wandb_credentials", True, message="ok", category="backend")
+        mock_repo.return_value = CR("repo_access", True, message="ok", category="backend")
+        mock_smoke.return_value = CR("smoke_test_command_nonempty", True, message="ok", category="warning")
+
+        results = run_all_backend_checks(SAMPLE_CAMPAIGN)
+        self.assertEqual(len(results), 5)
+        sky_result = [r for r in results if r.check_id == "skypilot_installed"][0]
+        self.assertFalse(sky_result.passed)
+        self.assertIn("unexpected error", sky_result.message.lower())
 
 
 if __name__ == "__main__":
