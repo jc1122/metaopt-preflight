@@ -65,7 +65,7 @@ Consumers must treat the on-disk artifact as a point-in-time snapshot.
 | `status` | string | Readiness outcome — see Status Semantics below. |
 | `campaign_id` | string | Campaign identifier from the campaign spec. |
 | `campaign_identity_hash` | string | Hash of the campaign identity payload, as defined by `ml-metaoptimization/references/contracts.md`. Format: `sha256:<64 lowercase hex chars>`. |
-| `runtime_config_hash` | string | Hash of the runtime configuration payload, as defined by `ml-metaoptimization/references/contracts.md`. Format: `sha256:<64 lowercase hex chars>`. |
+| `runtime_config_hash` | string | Hash of the runtime configuration payload, as defined by `ml-metaoptimization/references/contracts.md`. Format: `sha256:<64 lowercase hex chars>`. **Note:** Present in the artifact schema but not validated by the v4 orchestrator; reserved for v5+. |
 | `emitted_at` | string (ISO 8601) | Timestamp when the artifact was written. |
 | `preflight_duration_seconds` | number | Wall-clock duration of the preflight invocation in seconds. |
 | `checks_summary` | object | Aggregate check counts — see Checks Summary below. |
@@ -162,12 +162,16 @@ already available during `LOAD_CAMPAIGN`:
    parseable JSON with a recognized `schema_version`.
 2. `campaign_identity_hash` in the artifact matches the orchestrator's
    computed `campaign_identity_hash`.
-3. `runtime_config_hash` in the artifact matches the orchestrator's
-   computed `runtime_config_hash`.
 
 If any of these conditions fail, the artifact is **stale** (or absent) and
 the orchestrator must not proceed. It should block with a message directing
 the user to re-run `metaopt-preflight`.
+
+> **v4 implementation note:** The v4 orchestrator (`_evaluate_preflight()`)
+> checks only `campaign_identity_hash` for binding freshness.
+> `runtime_config_hash` is defined in the artifact schema but is not read or
+> validated by v4. A future orchestrator version may add runtime config hash
+> validation as an additional staleness signal.
 
 Note: The `status` field is **not** part of binding freshness. A fresh
 artifact may have `status` of either `READY` or `FAILED`. The orchestrator
@@ -177,10 +181,10 @@ binding freshness — see the Orchestrator Consumption Protocol below.
 **Rationale:** The campaign identity hash covers the campaign's structural
 identity (objective, datasets). The runtime config hash covers operational
 configuration (execution, queue backend, sanity, artifacts). Together they
-ensure the artifact was produced for the exact campaign configuration the
-orchestrator is about to execute. No additional hash computation by the
-orchestrator is required — it already computes both hashes during
-`LOAD_CAMPAIGN`.
+are intended to ensure the artifact was produced for the exact campaign
+configuration the orchestrator is about to execute. In v4, only the
+campaign identity hash is actively checked (see v4 implementation note
+above).
 
 ### Tier 2 — Operational Freshness (requires preflight rerun)
 
@@ -270,8 +274,8 @@ current configuration?) from readiness outcome (did preflight succeed?):
    JSON, or has an unrecognized `schema_version`) → block with
    `next_action = "run metaopt-preflight"`.
 3. If the file is present and parseable, verify **binding freshness**
-   (Tier 1): compare `campaign_identity_hash` and `runtime_config_hash`
-   against the orchestrator's computed values.
+   (Tier 1): compare `campaign_identity_hash` against the orchestrator's
+   computed value.
 4. If binding freshness **fails** (hash mismatch) → block with
    `next_action = "re-run metaopt-preflight (campaign configuration has changed)"`.
 5. If binding freshness **passes** and `status` is `FAILED` → block using
@@ -285,6 +289,15 @@ current configuration?) from readiness outcome (did preflight succeed?):
 The orchestrator must not attempt to re-run individual preflight checks. The
 readiness artifact is the sole interface; if it is absent or stale, the
 remedy is to invoke `metaopt-preflight`.
+
+> **Artifact status vs. orchestrator evaluation result:** The artifact's
+> `status` field emits `READY` or `FAILED` — these are the only values
+> preflight produces. The v4 orchestrator's `_evaluate_preflight()` maps
+> the artifact into its own internal evaluation result (e.g., `fresh_ready`,
+> `fresh_failed`, `missing`, `stale`, `unreadable`) which combines binding
+> freshness with the artifact status. Implementers should be aware that the
+> orchestrator's internal enum is distinct from the artifact's `status`
+> field.
 
 ---
 
