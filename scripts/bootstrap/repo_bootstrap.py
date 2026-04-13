@@ -79,11 +79,17 @@ def bootstrap_B2(cwd: Path) -> BootstrapResult:
 
 
 def _gitignore_has_entry(content: str) -> bool:
-    """Return True if any non-comment line matches ``.ml-metaopt/`` or ``.ml-metaopt``."""
+    """Return True if any non-comment line excludes .ml-metaopt/ content.
+
+    Accepts both the bare form (``.ml-metaopt/``) and the glob form
+    (``.ml-metaopt/*``) so that repos using a negation-exception pattern
+    like ``!.ml-metaopt/preflight-readiness.json`` are not broken.
+    """
+    valid = {_ML_METAOPT_DIR + "/", _ML_METAOPT_DIR, _ML_METAOPT_DIR + "/*"}
     for line in content.splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
-            if stripped in (_ML_METAOPT_DIR + "/", _ML_METAOPT_DIR):
+            if stripped in valid:
                 return True
     return False
 

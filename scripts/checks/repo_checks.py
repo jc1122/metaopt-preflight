@@ -54,7 +54,7 @@ def check_R2(campaign: dict, cwd: Path) -> CheckResult:
     for line in content.splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
-            if stripped in (_ML_METAOPT_DIR + "/", _ML_METAOPT_DIR):
+            if stripped in (_ML_METAOPT_DIR + "/", _ML_METAOPT_DIR, _ML_METAOPT_DIR + "/*"):
                 return CheckResult(
                     "R2", True, message=f".gitignore contains '{_ML_METAOPT_DIR}/' entry"
                 )
