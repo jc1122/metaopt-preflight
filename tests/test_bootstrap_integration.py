@@ -249,33 +249,29 @@ def test_13_triple_run_idempotent(make_empty_project: Path) -> None:
 # ── Edge cases ──────────────────────────────────────────────────────────
 
 
-def test_14_B1_raises_when_ml_metaopt_is_file(make_empty_project: Path) -> None:
-    """.ml-metaopt exists as a FILE: B1 raises instead of returning error result.
-
-    BUG: B1 should return BootstrapResult(applied=False, error=...) but currently
-    raises OSError.  This test documents the current (broken) behavior.
-    """
+def test_14_B1_returns_error_when_ml_metaopt_is_file(make_empty_project: Path) -> None:
+    """.ml-metaopt exists as a FILE: B1 returns a failed BootstrapResult."""
     proj = make_empty_project
     (proj / _ML_DIR).write_text("not a directory")
 
-    with pytest.raises(OSError):
-        bootstrap_B1(proj)
+    result = bootstrap_B1(proj)
+    assert result.applied is False
+    assert result.already_ok is False
+    assert "not a directory" in result.message
 
 
-def test_15_B3_raises_on_readonly_gitignore(make_empty_project: Path) -> None:
-    """.gitignore is not writable (chmod 444): B3 raises PermissionError.
-
-    BUG: B3 should return BootstrapResult(applied=False, error=...) but currently
-    raises PermissionError.  This test documents the current (broken) behavior.
-    """
+def test_15_B3_returns_error_on_readonly_gitignore(make_empty_project: Path) -> None:
+    """.gitignore is not writable (chmod 444): B3 returns a failed BootstrapResult."""
     proj = make_empty_project
     gitignore = proj / ".gitignore"
     gitignore.write_text("*.pyc\n")
     gitignore.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)  # 444
 
     try:
-        with pytest.raises(PermissionError):
-            bootstrap_B3(proj)
+        result = bootstrap_B3(proj)
+        assert result.applied is False
+        assert result.already_ok is False
+        assert "Cannot write .gitignore" in result.message
     finally:
         # Restore write permission so tmp_path cleanup succeeds
         gitignore.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)

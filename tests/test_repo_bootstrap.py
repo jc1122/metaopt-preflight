@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 from unittest.mock import patch
 
@@ -83,7 +84,7 @@ def test_B2_creates_only_missing_dirs(tmp_path: Path) -> None:
         assert (base / subdir).is_dir()
 
 
-# ── B3: .gitignore entry ────────────────────────────────────────────
+# ── B3: .gitignore entry ────────────────────────────────────────
 
 
 def test_B3_creates_gitignore_when_missing(tmp_path: Path) -> None:
@@ -123,13 +124,45 @@ def test_B3_matches_entry_without_trailing_slash(tmp_path: Path) -> None:
     assert result.already_ok is True
 
 
-# ── run_all_repo_bootstrap ──────────────────────────────────────────
+# ── B1/B3 error handling ────────────────────────────────────────
 
 
-def test_run_all_skips_B2_if_B1_raises(tmp_path: Path) -> None:
+def test_B1_returns_error_when_ml_metaopt_is_file(tmp_path: Path) -> None:
+    (tmp_path / ".ml-metaopt").write_text("not a directory")
+    result = bootstrap_B1(tmp_path)
+    assert result.mutation_id == "B1"
+    assert result.applied is False
+    assert result.already_ok is False
+    assert "not a directory" in result.message
+
+
+def test_B3_returns_error_on_permission_error(tmp_path: Path) -> None:
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_text("*.pyc\n")
+    gitignore.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)  # 444
+    try:
+        result = bootstrap_B3(tmp_path)
+        assert result.mutation_id == "B3"
+        assert result.applied is False
+        assert result.already_ok is False
+        assert "Cannot write .gitignore" in result.message
+    finally:
+        gitignore.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+
+# ── run_all_repo_bootstrap ──────────────────────────────────────
+
+
+def test_run_all_B1_fails_B3_still_runs(tmp_path: Path) -> None:
     with patch(
         "scripts.bootstrap.repo_bootstrap.bootstrap_B1",
         side_effect=PermissionError("cannot create dir"),
     ):
-        with pytest.raises(PermissionError):
-            run_all_repo_bootstrap(tmp_path)
+        results = run_all_repo_bootstrap(tmp_path)
+    mutation_ids = [r.mutation_id for r in results]
+    assert "B1" in mutation_ids
+    assert "B2" not in mutation_ids  # skipped because B1 failed
+    assert "B3" in mutation_ids
+    b1 = [r for r in results if r.mutation_id == "B1"][0]
+    assert b1.applied is False
+    assert b1.already_ok is False
