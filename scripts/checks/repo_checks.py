@@ -13,6 +13,7 @@ class CheckResult:
     check_id: str
     passed: bool
     message: str
+    category: str = "backend"
     remediation: str = ""
     bootstrapped: bool = False
 
