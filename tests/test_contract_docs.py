@@ -385,5 +385,29 @@ class TestBoundaryDocHashResumeGate(unittest.TestCase):
         )
 
 
+class TestBackendContractWording(unittest.TestCase):
+    """Owned backend-facing docs must match advisory-only bootstrap semantics."""
+
+    def test_backend_setup_documents_advisory_only_backend_bootstrap(self):
+        text = _read(os.path.join(REFERENCES_DIR, "backend-setup.md")).lower()
+        self.assertIn("backend bootstrap is **advisory-only**", text)
+        self.assertIn("does not install packages", text)
+        self.assertIn("re-evaluate backend checks", text)
+        self.assertIn("bootstrapped success state", text)
+
+    def test_boundary_documents_non_blocking_warning_checks(self):
+        text = _read(os.path.join(REFERENCES_DIR, "boundary.md")).lower()
+        self.assertIn("warning-category checks remain non-blocking", text)
+        self.assertIn("checks_summary.warnings", text)
+        self.assertIn("backend bootstrap", text)
+        self.assertIn("advisory-only", text)
+
+    def test_readiness_artifact_documents_current_failure_categories(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        self.assertIn('Current emitted values are `"backend"` and `"repo"`.', text)
+        self.assertIn('`category="warning"`', text)
+        self.assertIn("do **not** appear in\n`failures`", text)
+
+
 if __name__ == "__main__":
     unittest.main()
