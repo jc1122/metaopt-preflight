@@ -68,8 +68,14 @@ def check_vast_configured() -> CheckResult:
             capture_output=True,
             timeout=30,
         )
-        stdout = result.stdout.decode("utf-8", errors="replace")
-        if result.returncode == 0 and "vastai" in stdout.lower():
+        stdout = result.stdout.decode("utf-8", errors="replace").lower()
+        if (
+            result.returncode == 0
+            and "vast" in stdout
+            and "enabled" in stdout
+            and "not enabled" not in stdout
+            and "disabled" not in stdout
+        ):
             return CheckResult(
                 check_id=check_id,
                 passed=True,

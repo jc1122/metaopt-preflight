@@ -65,6 +65,21 @@ def _orchestrator_identity_hash(campaign: dict[str, Any]) -> str:
     return _orchestrator_sha256(payload)
 
 
+def _orchestrator_runtime_hash(campaign: dict[str, Any]) -> str:
+    payload = {
+        "compute": campaign.get("compute") if isinstance(campaign.get("compute"), dict) else None,
+        "wandb": {
+            "entity": _orchestrator_get_nested(campaign, ("wandb", "entity")),
+            "project": _orchestrator_get_nested(campaign, ("wandb", "project")),
+        },
+        "project": {
+            "repo": _orchestrator_get_nested(campaign, ("project", "repo")),
+            "smoke_test_command": _orchestrator_get_nested(campaign, ("project", "smoke_test_command")),
+        },
+    }
+    return _orchestrator_sha256(payload)
+
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 SAMPLE_CAMPAIGN: dict[str, Any] = {
@@ -153,9 +168,26 @@ class TestRuntimeConfigHash(unittest.TestCase):
         self.assertTrue(h.startswith("sha256:"))
         self.assertEqual(len(h.split(":", 1)[1]), 64)
 
+    def test_matches_contract_on_sample(self) -> None:
+        ours = compute_runtime_config_hash(SAMPLE_CAMPAIGN)
+        theirs = _orchestrator_runtime_hash(SAMPLE_CAMPAIGN)
+        self.assertEqual(ours, theirs)
+
     def test_compute_change_alters_hash(self) -> None:
         modified = {**SAMPLE_CAMPAIGN, "compute": {"provider": "aws"}}
         self.assertNotEqual(
+            compute_runtime_config_hash(SAMPLE_CAMPAIGN),
+            compute_runtime_config_hash(modified),
+        )
+
+    def test_unrelated_fields_do_not_affect_runtime_hash(self) -> None:
+        modified = {
+            **SAMPLE_CAMPAIGN,
+            "objective": {"metric": "loss", "direction": "minimize"},
+            "proposal_policy": {"current_target": 99},
+            "stop_conditions": {"max_iterations": 1},
+        }
+        self.assertEqual(
             compute_runtime_config_hash(SAMPLE_CAMPAIGN),
             compute_runtime_config_hash(modified),
         )

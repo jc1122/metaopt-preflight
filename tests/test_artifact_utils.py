@@ -109,7 +109,7 @@ class TestBuildArtifact(unittest.TestCase):
 
     def test_checks_summary_fields(self) -> None:
         art = _ready_artifact()
-        for key in ("total", "passed", "failed", "bootstrapped"):
+        for key in ("total", "passed", "failed", "bootstrapped", "warnings"):
             self.assertIn(key, art["checks_summary"])
 
     def test_invalid_status_raises(self) -> None:
@@ -139,6 +139,32 @@ class TestBuildArtifact(unittest.TestCase):
         )
         self.assertEqual(art["checks_summary"]["total"], 0)
 
+    def test_missing_total_is_inferred_from_counts(self) -> None:
+        art = build_artifact(
+            campaign_identity_hash=_IDENTITY_HASH,
+            runtime_config_hash=_RUNTIME_HASH,
+            status="READY",
+            failures=[],
+            checks_summary={"passed": 2, "failed": 1, "bootstrapped": 0, "warnings": 1},
+            diagnostics=None,
+            campaign_id=_CAMPAIGN_ID,
+            duration_seconds=0.1,
+        )
+        self.assertEqual(art["checks_summary"]["total"], 4)
+
+    def test_inconsistent_checks_summary_raises(self) -> None:
+        with self.assertRaisesRegex(ValueError, "checks_summary invariant violated"):
+            build_artifact(
+                campaign_identity_hash=_IDENTITY_HASH,
+                runtime_config_hash=_RUNTIME_HASH,
+                status="READY",
+                failures=[],
+                checks_summary={"total": 5, "passed": 2, "failed": 1, "bootstrapped": 0},
+                diagnostics=None,
+                campaign_id=_CAMPAIGN_ID,
+                duration_seconds=0.1,
+            )
+
 
 class TestWriteArtifact(unittest.TestCase):
     """write_artifact creates the file at the correct path."""
@@ -165,6 +191,12 @@ class TestWriteArtifact(unittest.TestCase):
             write_artifact(_failed_artifact(), state_dir)
             data = json.loads((state_dir / ARTIFACT_FILENAME).read_text(encoding="utf-8"))
             self.assertEqual(data["status"], "FAILED")
+
+    def test_accepts_string_state_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = write_artifact(_ready_artifact(), td)
+            self.assertTrue(path.exists())
+            self.assertEqual(path.parent, Path(td))
 
 
 class TestReadArtifact(unittest.TestCase):
@@ -194,6 +226,18 @@ class TestReadArtifact(unittest.TestCase):
             write_artifact(original, state_dir)
             loaded = read_artifact(state_dir)
             self.assertEqual(original, loaded)
+
+    def test_accepts_string_state_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            original = _ready_artifact()
+            write_artifact(original, td)
+            self.assertEqual(read_artifact(td), original)
+
+    def test_returns_none_for_invalid_utf8(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / ARTIFACT_FILENAME
+            path.write_bytes(b"\xff\xfe\xfa")
+            self.assertIsNone(read_artifact(Path(td)))
 
 
 class TestSummarizeFailures(unittest.TestCase):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from os import PathLike
 from pathlib import Path
 
 ARTIFACT_FILENAME = "preflight-readiness.json"
@@ -20,6 +21,31 @@ def summarize_failures(failures: list[dict]) -> str:
         return "proceed"
     ids = [f.get("check_id", "unknown") for f in failures]
     return f"Fix {len(ids)} failure{'s' if len(ids) != 1 else ''}: [{', '.join(ids)}]"
+
+
+def _normalize_checks_summary(checks_summary: dict) -> dict:
+    """Fill optional counters and enforce the contract invariant."""
+    summary = {
+        "passed": checks_summary.get("passed", 0),
+        "failed": checks_summary.get("failed", 0),
+        "bootstrapped": checks_summary.get("bootstrapped", 0),
+        "warnings": checks_summary.get("warnings", 0),
+    }
+    inferred_total = (
+        summary["passed"] + summary["failed"] + summary["bootstrapped"] + summary["warnings"]
+    )
+    total = checks_summary.get("total")
+    summary["total"] = inferred_total if total is None else total
+    if summary["total"] != inferred_total:
+        raise ValueError(
+            "checks_summary invariant violated: passed + failed + bootstrapped + warnings "
+            "must equal total"
+        )
+    return {"total": summary["total"], **summary}
+
+
+def _coerce_state_dir(state_dir: str | PathLike[str] | Path) -> Path:
+    return state_dir if isinstance(state_dir, Path) else Path(state_dir)
 
 
 def build_artifact(
@@ -41,13 +67,7 @@ def build_artifact(
     else:
         next_action = summarize_failures(failures)
 
-    summary = {
-        "total": checks_summary.get("total", 0),
-        "passed": checks_summary.get("passed", 0),
-        "failed": checks_summary.get("failed", 0),
-        "bootstrapped": checks_summary.get("bootstrapped", 0),
-        "warnings": checks_summary.get("warnings", 0),
-    }
+    summary = _normalize_checks_summary(checks_summary)
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -64,25 +84,27 @@ def build_artifact(
     }
 
 
-def write_artifact(artifact: dict, state_dir: Path) -> Path:
+def write_artifact(artifact: dict, state_dir: str | PathLike[str] | Path) -> Path:
     """Write artifact JSON to state_dir / ARTIFACT_FILENAME.
 
     Creates parent directories if needed. Overwrites any existing file
     (latest-wins semantics).
     """
+    state_dir = _coerce_state_dir(state_dir)
     state_dir.mkdir(parents=True, exist_ok=True)
     path = state_dir / ARTIFACT_FILENAME
     path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
     return path
 
 
-def read_artifact(state_dir: Path) -> dict | None:
+def read_artifact(state_dir: str | PathLike[str] | Path) -> dict | None:
     """Read and parse the readiness artifact. Returns None if missing or corrupt."""
+    state_dir = _coerce_state_dir(state_dir)
     path = state_dir / ARTIFACT_FILENAME
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             return None
         return data
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
