@@ -5,7 +5,6 @@ Verifies B1–B3 fix R1–R6, are idempotent on re-run, and handle edge cases.
 
 from __future__ import annotations
 
-import os
 import stat
 from pathlib import Path
 
@@ -275,3 +274,22 @@ def test_15_B3_returns_error_on_readonly_gitignore(make_empty_project: Path) -> 
     finally:
         # Restore write permission so tmp_path cleanup succeeds
         gitignore.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+
+def test_16_run_all_bootstrap_is_scoped_to_explicit_project_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """run_all_repo_bootstrap mutates only the provided root, not process cwd."""
+    working_dir = tmp_path / "outside-cwd"
+    working_dir.mkdir()
+    target_project = tmp_path / "target-project"
+    target_project.mkdir()
+    monkeypatch.chdir(working_dir)
+
+    run_all_repo_bootstrap(target_project)
+
+    assert (target_project / _ML_DIR).is_dir()
+    assert (target_project / ".gitignore").is_file()
+    assert not (working_dir / _ML_DIR).exists()
+    assert not (working_dir / ".gitignore").exists()

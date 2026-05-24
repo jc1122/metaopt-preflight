@@ -79,10 +79,10 @@ Consumers must treat the on-disk artifact as a point-in-time snapshot.
 | Field | Type | Description |
 |-------|------|-------------|
 | `total` | non-negative integer | Total number of readiness checks evaluated. |
-| `passed` | non-negative integer | Checks that passed on initial evaluation. |
-| `failed` | non-negative integer | Checks that remain failed after any bootstrap attempts. |
-| `bootstrapped` | non-negative integer | Checks that initially failed but passed after a bootstrap mutation. |
-| `warnings` | non-negative integer | Checks with `category="warning"` that do not block readiness. |
+| `passed` | non-negative integer | Checks that passed and are not counted as bootstrapped. |
+| `failed` | non-negative integer | Hard-failure checks that remain failed after any bootstrap attempts. Warning-category results do not count here. |
+| `bootstrapped` | non-negative integer | Checks that initially failed but passed after an implemented bootstrap mutation. In the current implementation this is repo-scoped; backend guidance does not increment it. |
+| `warnings` | non-negative integer | Failed checks with `category="warning"`. These are non-blocking and may be summarized in `diagnostics`. |
 
 Invariant: `passed + failed + bootstrapped + warnings == total`.
 
@@ -93,12 +93,21 @@ Each entry in `failures` must be an object with:
 | Field | Type | Description |
 |-------|------|-------------|
 | `check_id` | string | Stable identifier for the check (e.g., `backend_reachability`, `campaign_file_exists`). Specific check IDs will be enumerated in the check catalog (later task). |
-| `category` | string | One of `"backend"`, `"repository"`, `"environment"`. |
+| `category` | string | Copied from `CheckResult.category` for serialized hard failures. Current emitted values are `"backend"` and `"repo"`. |
 | `message` | string | Human-readable description of what failed. |
 | `remediation` | string | Actionable guidance for resolving the failure. |
 
 The `failures` array must be empty when `status` is `READY` and non-empty
 when `status` is `FAILED`.
+
+Warning-category results (`category="warning"`) do **not** appear in
+`failures`. They increment `checks_summary.warnings` and may be summarized in
+`diagnostics` instead.
+
+> **Compatibility note:** Earlier draft docs used category names such as
+> `"repository"` and `"environment"`. The current implementation emits
+> `CheckResult.category` directly, so hard failures appear today as `"backend"`
+> or `"repo"`.
 
 ---
 
@@ -106,7 +115,7 @@ when `status` is `FAILED`.
 
 | Value | Meaning |
 |-------|---------|
-| `READY` | All readiness checks passed (possibly after bootstrap). The environment is safe for `ml-metaoptimization` to begin a campaign. |
+| `READY` | All hard-failure readiness checks passed (possibly after bootstrap). Warning-category checks may still be recorded, but they do not block `ml-metaoptimization` from beginning a campaign. |
 | `FAILED` | One or more readiness checks remain failed. The environment is NOT ready. The `failures` array contains actionable details. |
 
 No other status values are valid.
@@ -132,9 +141,10 @@ The `diagnostics` field is free-form text intended for human consumption or
 logging. It may include:
 
 - Notes about bootstrap mutations performed (e.g., "created `.ml-metaopt/`
-  directory", "provisioned delegation infrastructure").
+  directory").
 - Warnings that do not block readiness but may be relevant (e.g., "backend
-  responded slowly — 4.2 s latency").
+  guidance: ENV_WANDB_GUIDANCE: Set WANDB_API_KEY", "Warnings:
+  smoke_test_command_nonempty: ...").
 - `null` when there is nothing notable.
 
 The orchestrator must not parse `diagnostics` programmatically. It exists for
@@ -180,13 +190,14 @@ artifact may have `status` of either `READY` or `FAILED`. The orchestrator
 evaluates `status` as a separate readiness-outcome check after confirming
 binding freshness — see the Orchestrator Consumption Protocol below.
 
-**Rationale:** The campaign identity hash covers the campaign's structural
-identity (objective, datasets). The runtime config hash covers operational
-configuration (execution, queue backend, sanity, artifacts). Together they
-are intended to ensure the artifact was produced for the exact campaign
-configuration the orchestrator is about to execute. In v4, only the
-campaign identity hash is actively checked (see v4 implementation note
-above).
+**Rationale:** The campaign identity hash covers the v4 orchestrator identity
+fields: `campaign.name`, `objective.metric`, `objective.direction`,
+`wandb.entity`, and `wandb.project`. The runtime config hash covers the
+current operational fields: the full `compute` block, `wandb.entity`,
+`wandb.project`, `project.repo`, and `project.smoke_test_command`. Together
+they are intended to ensure the artifact was produced for the exact campaign
+configuration the orchestrator is about to execute. In v4, only the campaign
+identity hash is actively checked (see v4 implementation note above).
 
 ### Tier 2 — Operational Freshness (requires preflight rerun)
 
@@ -195,7 +206,8 @@ comparison alone:
 
 - Backend reachability (network state may have changed)
 - Runtime dependency availability (tools may have been uninstalled)
-- Repository operation state (a merge or rebase may have started)
+- Local `.ml-metaopt/` scaffold state (directories or `.gitignore` may have
+  changed)
 - Credential validity (tokens may have expired)
 
 The readiness artifact does not guarantee these conditions remain true after

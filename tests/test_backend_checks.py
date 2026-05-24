@@ -47,6 +47,12 @@ class TestCheckSkypilotInstalled(unittest.TestCase):
         result = check_skypilot_installed()
         self.assertTrue(result.passed)
         self.assertEqual(result.check_id, "skypilot_installed")
+        # Assert intended SkyPilot command and timeout behavior
+        mock_run.assert_called_once_with(
+            ["sky", "version"],
+            capture_output=True,
+            timeout=10,
+        )
 
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     def test_fails_when_sky_not_found(self, mock_run: mock.MagicMock) -> None:
@@ -68,12 +74,38 @@ class TestCheckSkypilotInstalled(unittest.TestCase):
 class TestCheckVastConfigured(unittest.TestCase):
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     def test_passes_when_vastai_in_output(self, mock_run: mock.MagicMock) -> None:
+        # SkyPilot 'sky check' output for a configured cloud typically contains
+        # the cloud name followed by ': enabled'.
         mock_run.return_value = _completed_process(
             returncode=0, stdout=b"vastai: enabled"
         )
         result = check_vast_configured()
         self.assertTrue(result.passed)
         self.assertEqual(result.check_id, "vast_configured")
+        # Assert intended SkyPilot check command and timeout behavior
+        mock_run.assert_called_once_with(
+            ["sky", "check", "--cloud", "vast"],
+            capture_output=True,
+            timeout=30,
+        )
+
+    @mock.patch("scripts.checks.backend_checks.subprocess.run")
+    def test_fails_when_vastai_disabled_in_output(self, mock_run: mock.MagicMock) -> None:
+        # If sky check returns 0 but says disabled, it should not pass.
+        mock_run.return_value = _completed_process(
+            returncode=0, stdout=b"vastai: disabled"
+        )
+        result = check_vast_configured()
+        self.assertFalse(result.passed)
+
+    @mock.patch("scripts.checks.backend_checks.subprocess.run")
+    def test_fails_when_vastai_not_enabled_in_output(self, mock_run: mock.MagicMock) -> None:
+        # If sky check returns 0 but says [not enabled], it should not pass.
+        mock_run.return_value = _completed_process(
+            returncode=0, stdout=b"vastai: [not enabled]"
+        )
+        result = check_vast_configured()
+        self.assertFalse(result.passed)
 
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     def test_fails_when_vastai_not_in_output(self, mock_run: mock.MagicMock) -> None:
@@ -140,6 +172,12 @@ class TestCheckRepoAccess(unittest.TestCase):
         result = check_repo_access(SAMPLE_CAMPAIGN)
         self.assertTrue(result.passed)
         self.assertEqual(result.check_id, "repo_access")
+        # Assert intended git command and timeout behavior
+        mock_run.assert_called_once_with(
+            ["git", "ls-remote", "--exit-code", SAMPLE_CAMPAIGN["project"]["repo"]],
+            capture_output=True,
+            timeout=30,
+        )
 
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     def test_fails_when_ls_remote_returns_128(self, mock_run: mock.MagicMock) -> None:
@@ -179,6 +217,11 @@ class TestTimeoutHandling(unittest.TestCase):
         result = check_skypilot_installed()
         self.assertFalse(result.passed)
         self.assertIn("timed out", result.message.lower())
+        mock_run.assert_called_once_with(
+            ["sky", "version"],
+            capture_output=True,
+            timeout=10,
+        )
 
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     def test_vast_timeout_returns_failed(self, mock_run: mock.MagicMock) -> None:
@@ -186,6 +229,11 @@ class TestTimeoutHandling(unittest.TestCase):
         result = check_vast_configured()
         self.assertFalse(result.passed)
         self.assertIn("timed out", result.message.lower())
+        mock_run.assert_called_once_with(
+            ["sky", "check", "--cloud", "vast"],
+            capture_output=True,
+            timeout=30,
+        )
 
     @mock.patch("scripts.checks.backend_checks.subprocess.run")
     def test_repo_access_timeout_returns_failed(
@@ -195,6 +243,11 @@ class TestTimeoutHandling(unittest.TestCase):
         result = check_repo_access(SAMPLE_CAMPAIGN)
         self.assertFalse(result.passed)
         self.assertIn("timed out", result.message.lower())
+        mock_run.assert_called_once_with(
+            ["git", "ls-remote", "--exit-code", SAMPLE_CAMPAIGN["project"]["repo"]],
+            capture_output=True,
+            timeout=30,
+        )
 
 
 # ── Aggregate runner ────────────────────────────────────────────────────

@@ -1,7 +1,9 @@
-"""End-to-end integration tests for scripts/run_preflight.py.
+"""End-to-end tests for ``scripts.run_preflight``.
 
-14 scenarios covering happy path, bootstrap, failure, error, and hash
-consistency.  Backend checks mocked to avoid network calls.
+Most scenarios run ``main()`` in-process so pytest-time mocks apply to
+``run_all_backend_checks`` and no real backend probing occurs. A small CLI
+section uses a real subprocess for usage/input error paths, where in-process
+mocks do not apply.
 """
 
 from __future__ import annotations
@@ -148,7 +150,34 @@ def _read_artifact(cwd: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-# ── Happy path (tests 1–4) ──────────────────────────────────────────
+def _run_preflight_in_process(cwd: Path, campaign_file: Path) -> int:
+    """Run the CLI entrypoint in-process so patched checks apply."""
+    return main(["--campaign", str(campaign_file), "--cwd", str(cwd)])
+
+
+def _run_cli_subprocess(cwd: Path, campaign_file: Path) -> subprocess.CompletedProcess[str]:
+    """Run the real CLI in a subprocess from the repo root.
+
+    Using ``cwd=_REPO_ROOT`` keeps ``python -m scripts.run_preflight`` importable.
+    Any mocks active in this test process are intentionally not visible here.
+    """
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.run_preflight",
+            "--campaign",
+            str(campaign_file),
+            "--cwd",
+            str(cwd),
+        ],
+        capture_output=True,
+        cwd=_REPO_ROOT,
+        text=True,
+    )
+
+
+# ── In-process entrypoint tests (test-time mocks apply) ─────────────
 
 
 @mock.patch("scripts.run_preflight.run_all_backend_checks")
@@ -157,7 +186,7 @@ def test_happy_exit_0_status_ready(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_pass
     cwd, cf = make_project()
 
-    rc = main(["--campaign", str(cf), "--cwd", str(cwd)])
+    rc = _run_preflight_in_process(cwd, cf)
 
     assert rc == 0
     art = _read_artifact(cwd)
@@ -170,7 +199,7 @@ def test_artifact_written_to_state_dir(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_pass
     cwd, cf = make_project()
 
-    main(["--campaign", str(cf), "--cwd", str(cwd)])
+    _run_preflight_in_process(cwd, cf)
 
     artifact_path = cwd / _STATE_DIR / ARTIFACT_FILENAME
     assert artifact_path.is_file()
@@ -183,7 +212,7 @@ def test_artifact_has_correct_identity_hash(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_pass
     cwd, cf = make_project()
 
-    main(["--campaign", str(cf), "--cwd", str(cwd)])
+    _run_preflight_in_process(cwd, cf)
 
     art = _read_artifact(cwd)
     campaign_data = yaml.safe_load(cf.read_text())
@@ -197,7 +226,7 @@ def test_checks_summary_total_14(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_pass
     cwd, cf = make_project()
 
-    main(["--campaign", str(cf), "--cwd", str(cwd)])
+    _run_preflight_in_process(cwd, cf)
 
     art = _read_artifact(cwd)
     assert art["checks_summary"]["total"] == 14
@@ -212,7 +241,7 @@ def test_bootstrap_missing_subdirs_becomes_ready(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_pass
     cwd, cf = make_project(skip_subdirs=True)
 
-    rc = main(["--campaign", str(cf), "--cwd", str(cwd)])
+    rc = _run_preflight_in_process(cwd, cf)
 
     assert rc == 0
     art = _read_artifact(cwd)
@@ -236,7 +265,7 @@ def test_bootstrap_creates_root_gitignore(mock_backend, make_project):
 
     assert not (cwd / ".gitignore").exists()
 
-    rc = main(["--campaign", str(cf), "--cwd", str(cwd)])
+    rc = _run_preflight_in_process(cwd, cf)
 
     assert rc == 0
     assert (cwd / ".gitignore").is_file()
@@ -253,7 +282,7 @@ def test_backend_hard_failure_exit_1(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_fail
     cwd, cf = make_project()
 
-    rc = main(["--campaign", str(cf), "--cwd", str(cwd)])
+    rc = _run_preflight_in_process(cwd, cf)
 
     assert rc == 1
     art = _read_artifact(cwd)
@@ -266,7 +295,7 @@ def test_failed_artifact_has_failures(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_fail
     cwd, cf = make_project()
 
-    main(["--campaign", str(cf), "--cwd", str(cwd)])
+    _run_preflight_in_process(cwd, cf)
 
     art = _read_artifact(cwd)
     assert art["status"] == "FAILED"
@@ -281,44 +310,28 @@ def test_failed_next_action_not_proceed(mock_backend, make_project):
     mock_backend.side_effect = _fresh_backend_fail
     cwd, cf = make_project()
 
-    main(["--campaign", str(cf), "--cwd", str(cwd)])
+    _run_preflight_in_process(cwd, cf)
 
     art = _read_artifact(cwd)
     assert art["status"] == "FAILED"
     assert art["next_action"] != "proceed"
 
 
-# ── Error path (tests 10–12) ────────────────────────────────────────
+# ── Real CLI subprocess tests (test-time mocks do not apply) ────────
 
 
 def test_missing_campaign_file_exit_2(tmp_path):
-    """10. Missing campaign file → exit 2 (subprocess)."""
+    """10. Real CLI subprocess: missing campaign file → exit 2."""
     missing = tmp_path / "nonexistent.yaml"
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "scripts.run_preflight",
-            "--campaign", str(missing),
-            "--cwd", str(tmp_path),
-        ],
-        capture_output=True,
-        cwd=_REPO_ROOT,
-    )
+    result = _run_cli_subprocess(tmp_path, missing)
     assert result.returncode == 2
 
 
 def test_malformed_yaml_exit_2(tmp_path):
-    """11. Malformed YAML → exit 2 (subprocess)."""
+    """11. Real CLI subprocess: malformed YAML → exit 2."""
     bad = tmp_path / "bad.yaml"
     bad.write_text("{{{{bad: yaml::::", encoding="utf-8")
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "scripts.run_preflight",
-            "--campaign", str(bad),
-            "--cwd", str(tmp_path),
-        ],
-        capture_output=True,
-        cwd=_REPO_ROOT,
-    )
+    result = _run_cli_subprocess(tmp_path, bad)
     assert result.returncode == 2
 
 
@@ -329,7 +342,7 @@ def test_missing_campaign_key_r8_fails_exit_1(mock_backend, make_project):
     incomplete = {k: v for k, v in _CAMPAIGN.items() if k != "campaign"}
     cwd, cf = make_project(campaign=incomplete)
 
-    rc = main(["--campaign", str(cf), "--cwd", str(cwd)])
+    rc = _run_preflight_in_process(cwd, cf)
 
     assert rc == 1
     art = _read_artifact(cwd)
@@ -351,7 +364,7 @@ def _scaffold_and_run(cwd: Path, campaign_data: dict) -> dict:
     (cwd / ".gitignore").write_text(".ml-metaopt/\n")
     cf = cwd / "campaign.yaml"
     cf.write_text(yaml.dump(campaign_data), encoding="utf-8")
-    main(["--campaign", str(cf), "--cwd", str(cwd)])
+    _run_preflight_in_process(cwd, cf)
     return _read_artifact(cwd)
 
 

@@ -15,10 +15,18 @@ import time
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    print(
+        "Error: PyYAML is required. Install dependencies with: "
+        "pip install -r requirements.txt",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
 
 try:
-    from scripts._artifact_utils import build_artifact, write_artifact
+    from scripts._artifact_utils import ARTIFACT_FILENAME, build_artifact, write_artifact
     from scripts._hash_utils import (
         compute_campaign_identity_hash,
         compute_runtime_config_hash,
@@ -28,9 +36,10 @@ try:
     from scripts.checks.backend_checks import run_all_backend_checks
     from scripts.checks.repo_checks import CheckResult, run_all_repo_checks
 except ImportError:
-    # Direct script invocation: python3 scripts/run_preflight.py
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from scripts._artifact_utils import build_artifact, write_artifact
+    repo_root = Path(__file__).resolve().parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from scripts._artifact_utils import ARTIFACT_FILENAME, build_artifact, write_artifact
     from scripts._hash_utils import (
         compute_campaign_identity_hash,
         compute_runtime_config_hash,
@@ -43,6 +52,21 @@ except ImportError:
 _STATE_DIR_NAME = ".ml-metaopt"
 
 
+def _is_absolute_arg(value: str | Path) -> bool:
+    return Path(value).expanduser().is_absolute()
+
+
+def _resolve_cwd(value: str | Path) -> Path:
+    return Path(value).expanduser().resolve()
+
+
+def _resolve_campaign_path(value: str | Path, cwd: Path) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    return (cwd / path).resolve()
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run metaopt-preflight readiness checks.",
@@ -52,7 +76,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--cwd",
-        default=".",
+        default=None,
         help="Project root directory (default: current directory)",
     )
     return parser.parse_args(argv)
@@ -94,8 +118,14 @@ def run_preflight(
 ) -> int:
     """Execute the 4-phase preflight flow. Returns exit code."""
     start = time.monotonic()
+    cwd = _resolve_cwd(cwd)
+    campaign_path = _resolve_campaign_path(campaign_path, cwd)
 
     # ── Phase 1: Gather ──────────────────────────────────────────────
+    if not cwd.is_dir():
+        print(f"Error: --cwd must be an existing directory: {cwd}", file=sys.stderr)
+        return 2
+
     if not campaign_path.is_file():
         print(f"Error: campaign file not found: {campaign_path}", file=sys.stderr)
         return 2
@@ -103,6 +133,9 @@ def run_preflight(
     try:
         raw = campaign_path.read_text(encoding="utf-8")
         campaign = yaml.safe_load(raw)
+    except OSError as exc:
+        print(f"Error: could not read campaign YAML: {exc}", file=sys.stderr)
+        return 2
     except yaml.YAMLError as exc:
         print(f"Error: malformed campaign YAML: {exc}", file=sys.stderr)
         return 2
@@ -188,7 +221,12 @@ def run_preflight(
         campaign_id=campaign_id,
         duration_seconds=round(duration, 2),
     )
-    artifact_path = write_artifact(artifact, state_dir)
+    try:
+        artifact_path = write_artifact(artifact, state_dir)
+    except OSError as exc:
+        target = state_dir / ARTIFACT_FILENAME
+        print(f"Error: could not write readiness artifact: {target}: {exc}", file=sys.stderr)
+        return 1
 
     # Summary output
     print(f"campaign_id: {campaign_id}")
@@ -205,8 +243,16 @@ def run_preflight(
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    campaign_path = Path(args.campaign)
-    cwd = Path(args.cwd).resolve()
+
+    if not _is_absolute_arg(args.campaign):
+        print("Error: --campaign must be an absolute path", file=sys.stderr)
+        return 2
+    if args.cwd is not None and not _is_absolute_arg(args.cwd):
+        print("Error: --cwd must be an absolute path when provided", file=sys.stderr)
+        return 2
+
+    cwd = _resolve_cwd(args.cwd) if args.cwd is not None else Path.cwd().resolve()
+    campaign_path = _resolve_campaign_path(args.campaign, cwd)
     return run_preflight(campaign_path, cwd)
 
 
