@@ -278,6 +278,15 @@ class TestConsumptionPointConsistency(unittest.TestCase):
             "artifact is consumed during LOAD_CAMPAIGN only",
         )
 
+    def test_boundary_places_freshness_gate_at_load_campaign_only(self):
+        text = _read(os.path.join(REFERENCES_DIR, "boundary.md"))
+        section_marker = "### Campaign-change detection via identity hash"
+        self.assertIn(section_marker, text)
+        section = text.split(section_marker, 1)[1].split("\n## ", 1)[0]
+        self.assertIn("`LOAD_CAMPAIGN`", section)
+        self.assertIn("`HYDRATE_STATE` assumes that gate has already passed", section)
+        self.assertNotIn("mismatch check occurs at `HYDRATE_STATE`", section)
+
 
 class TestReadmeValidationSection(unittest.TestCase):
     """README must include a validation section explaining how to run tests."""
@@ -348,21 +357,59 @@ class TestPreflightDurationField(unittest.TestCase):
 # ── R8 key correctness ─────────────────────────────────────────────────
 
 
-class TestRepoSetupKeyCorrectness(unittest.TestCase):
-    """repo-setup.md R3 must list campaign_id, not campaign_name."""
+class TestRepoSetupCurrentContract(unittest.TestCase):
+    """repo-setup.md must match the implemented repo check contract."""
 
-    def test_repo_setup_mentions_campaign_key_not_campaign_name(self):
+    def test_repo_setup_documents_current_r1_to_r9_meanings(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        expected_rows = (
+            "| R1 | `.ml-metaopt/` directory exists |",
+            "| R2 | Root `.gitignore` excludes `.ml-metaopt/` |",
+            "| R3 | `.ml-metaopt/handoffs/` exists |",
+            "| R4 | `.ml-metaopt/worker-results/` exists |",
+            "| R5 | `.ml-metaopt/tasks/` and `.ml-metaopt/executor-events/` exist |",
+            "| R6 | `.ml-metaopt/artifacts/{code,data,manifests,patches}/` all exist |",
+            "| R7 | `project.smoke_test_command` is present and non-empty |",
+            "| R8 | Required top-level campaign keys are present |",
+            "| R9 | `project.repo` is present and non-empty |",
+        )
+        for row in expected_rows:
+            self.assertIn(row, text)
+
+    def test_repo_setup_documents_current_required_top_level_keys(self):
         text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
         self.assertIn(
-            "campaign_id",
+            "Top-level keys `campaign`, `project`, `wandb`, `compute`, and `objective` are all present.",
             text,
-            "repo-setup.md must list campaign_id as a required key",
         )
-        self.assertNotIn(
-            "campaign_name",
+        self.assertIn(
+            "It does **not** require a top-level `campaign_id` or `campaign_name`.",
             text,
-            "repo-setup.md must NOT list campaign_name as a required key",
         )
+
+    def test_repo_setup_marks_old_git_and_dataset_checks_as_not_current_r_checks(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        self.assertIn(
+            "Git repository detection and merge/rebase hygiene are not currently checked",
+            text,
+        )
+        self.assertIn(
+            "Campaign file discovery and YAML parseability are handled before repo checks",
+            text,
+        )
+        self.assertIn(
+            "run; they are not numbered repo checks.",
+            text,
+        )
+        self.assertIn(
+            "Dataset-path existence is not checked by the current repo checks.",
+            text,
+        )
+
+    def test_repo_setup_uses_current_repo_failure_category(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        self.assertIn('`category: "repo"`', text)
+        self.assertNotIn('`category: "repository"`', text)
 
 
 # ── Boundary doc hash/resume gate ──────────────────────────────────────
@@ -383,6 +430,46 @@ class TestBoundaryDocHashResumeGate(unittest.TestCase):
             text,
             "boundary.md must mention resume semantics (no resume)",
         )
+
+
+class TestBackendContractWording(unittest.TestCase):
+    """Owned backend-facing docs must match advisory-only bootstrap semantics."""
+
+    def test_backend_setup_documents_advisory_only_backend_bootstrap(self):
+        text = _read(os.path.join(REFERENCES_DIR, "backend-setup.md")).lower()
+        self.assertIn("backend bootstrap is **advisory-only**", text)
+        self.assertIn("does not install packages", text)
+        self.assertIn("re-evaluate backend checks", text)
+        self.assertIn("bootstrapped success state", text)
+
+    def test_boundary_documents_non_blocking_warning_checks(self):
+        text = _read(os.path.join(REFERENCES_DIR, "boundary.md")).lower()
+        self.assertIn("warning-category checks remain non-blocking", text)
+        self.assertIn("checks_summary.warnings", text)
+        self.assertIn("backend bootstrap", text)
+        self.assertIn("advisory-only", text)
+        self.assertIn("repo check r7 remains the hard presence gate", text)
+
+    def test_readiness_artifact_documents_current_failure_categories(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        self.assertIn('Current emitted values are `"backend"` and `"repo"`.', text)
+        self.assertIn('`category="warning"`', text)
+        self.assertIn("do **not** appear in\n`failures`", text)
+
+    def test_readiness_artifact_hash_fields_match_current_hash_utils(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        self.assertIn("`campaign.name`, `objective.metric`, `objective.direction`", text)
+        self.assertIn("the full `compute` block", text)
+        self.assertIn("`project.repo`, and `project.smoke_test_command`", text)
+        self.assertNotIn("objective, datasets", text)
+        self.assertNotIn("execution, queue backend, sanity, artifacts", text)
+
+    def test_backend_setup_does_not_claim_v4_runtime_hash_enforcement(self):
+        text = _read(os.path.join(REFERENCES_DIR, "backend-setup.md"))
+        section = text.split("## `runtime_config_hash`", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("future orchestrator versions can\nuse it for binding freshness", section)
+        self.assertIn("v4 does not read or validate `runtime_config_hash`", section)
+        self.assertNotIn("The orchestrator uses it for binding freshness", section)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,8 @@ project docs (SKILL.md, README.md) must remain consistent with this document.
 
 `ml-metaoptimization` is a resumable deterministic state machine. Its entry
 point (`LOAD_CAMPAIGN`) assumes the environment is already viable — backend
-reachable, repository structure present, delegation infrastructure provisioned.
+prerequisites satisfied, repository structure present, and local workspace
+scaffolding available where required.
 If those prerequisites are not met, the orchestrator transitions to
 `BLOCKED_CONFIG` and halts, leaving the user to diagnose and fix the
 environment manually.
@@ -17,8 +18,9 @@ environment manually.
 invocable skill that:
 
 1. **Evaluates** whether the environment meets campaign prerequisites.
-2. **Bootstraps** missing but provisionable prerequisites via bounded
-   idempotent mutations.
+2. **Bootstraps** supported local prerequisites via bounded idempotent
+   mutations and emits advisory guidance for backend prerequisites it does not
+   mutate.
 3. **Signals** readiness (or actionable failure) through a persisted artifact
    that the orchestrator can gate on.
 
@@ -31,39 +33,50 @@ sees a valid readiness artifact and proceeds, or it does not and blocks.
 
 Preflight verifies that the runtime environment can support a campaign:
 
-- Backend connectivity — can the queue backend be reached and respond to
-  basic commands?
-- Delegation infrastructure — is the remote compute layer functional?
-- Runtime dependencies — are required tools, interpreters, and libraries
-  available?
-- Network and credential prerequisites — can required services be
-  authenticated against?
+- SkyPilot availability — is the `sky` CLI installed?
+- Vast.ai configuration — does `sky check --cloud vast` report Vast.ai as
+  enabled?
+- WandB credentials — can runtime authenticate via `WANDB_API_KEY` or
+  `~/.netrc`?
+- Project repo reachability — can the configured `project.repo` be reached?
+- Smoke test declaration — backend checks record a warning-category advisory
+  result, while repo check R7 remains the hard presence gate for
+  `project.smoke_test_command`.
 
 ### 2. Repository readiness evaluation
 
-Preflight verifies that the target repository is in a state compatible with
-`ml-metaoptimization`:
+Preflight verifies the target repository through the current R1-R9 repo-check
+contract:
 
-- Required file presence — does `ml_metaopt_campaign.yaml` exist and parse?
-- Directory structure — is the expected layout present or creatable?
-- Git state — is the repository free of interrupted or conflicted operations?
+- Local `.ml-metaopt/` directory and required subdirectories exist or are
+  scaffoldable.
+- Root `.gitignore` excludes `.ml-metaopt/` or can be updated safely.
+- `project.smoke_test_command`, required top-level campaign keys, and
+  `project.repo` are present. These are presence-only checks.
+
+Git repository state, campaign-file discovery/YAML parsing, and dataset-path
+existence are not current R1-R9 repo checks.
 
 ### 3. Bounded bootstrap mutations
 
 When readiness checks fail due to missing but provisionable prerequisites,
 preflight may perform **bounded idempotent mutations** to bring the
-environment to a ready state. Examples include:
+environment to a ready state where the implementation supports that behavior.
 
-- Provisioning or verifying delegation/backend infrastructure
-- Scaffolding the `.ml-metaopt/` directory structure
-- Executing declared repo-preparation steps from the campaign spec
+Current implementation split:
+
+- **Repository bootstrap** may create missing local `.ml-metaopt/`
+  directories.
+- **Backend bootstrap** is advisory-only and never auto-installs SkyPilot,
+  stores credentials, prompts for secrets, or provisions/configures Vast.ai.
 
 All bootstrap mutations must satisfy:
 
 - **Idempotent** — re-applying a mutation to an already-ready environment is
   a safe no-op.
-- **Bounded** — mutations are limited to environment/infrastructure setup.
-  They must not modify experiment code, campaign state, or application logic.
+- **Bounded** — automated mutations are limited to local workspace/environment
+  setup. They must not modify experiment code, campaign state, application
+  logic, remote providers, or credential stores.
 - **Declared** — each mutation category will be enumerated in the detailed
   backend setup contract and repo setup contract (later tasks).
 
@@ -114,7 +127,7 @@ Read configuration sources to determine the scope of readiness checks:
 
 - Parse `ml_metaopt_campaign.yaml` (existence and basic structure only — full
   schema validation is `LOAD_CAMPAIGN`'s job).
-- Read backend declarations from the campaign spec.
+- Read backend-related declarations from the campaign spec.
 - Inspect the environment for runtime tool availability.
 
 Output: an internal checklist of evaluations and potential bootstrap actions.
@@ -123,7 +136,8 @@ Output: an internal checklist of evaluations and potential bootstrap actions.
 
 Run each readiness check and record pass/fail with diagnostics:
 
-- Backend reachability (e.g., connectivity probe against declared commands).
+- Backend prerequisites (SkyPilot CLI, Vast.ai configuration, WandB
+  credentials, repo reachability, smoke test declaration).
 - Repository structure checks.
 - Environment dependency checks.
 
@@ -131,15 +145,19 @@ Output: a checklist with pass/fail results and failure diagnostics.
 
 ### Phase 3 — Bootstrap
 
-For each failed check that has a declared bootstrap remedy:
+For each failed hard check that has an implemented bootstrap remedy:
 
 1. Execute the bounded idempotent mutation.
 2. Re-evaluate the affected check.
 3. Record whether the bootstrap succeeded.
 
-Checks that fail without a bootstrap remedy remain as failures in the final
-result. Bootstrap is optional — if all checks pass in Phase 2, this phase is
-a no-op.
+Checks that fail without an implemented bootstrap remedy remain as failures in
+the final result. Backend failures currently fall into that advisory path:
+preflight emits guidance, but does not mutate packages, credentials, or remote
+backend/provider configuration. Warning-category checks remain non-blocking and
+contribute to `checks_summary.warnings` and `diagnostics` rather than
+`failures[]`. Bootstrap is optional — if all checks pass in Phase 2, this
+phase is a no-op.
 
 Output: updated checklist with post-bootstrap results.
 
@@ -147,10 +165,11 @@ Output: updated checklist with post-bootstrap results.
 
 Produce the persisted readiness artifact:
 
-- **Pass:** all checks passed (possibly after bootstrap). The artifact
-  confirms readiness for `ml-metaoptimization`.
-- **Fail:** one or more checks remain failed. The artifact contains
-  actionable diagnostics for each failure.
+- **Pass:** all hard-failure checks passed (possibly after bootstrap). The
+  artifact confirms readiness for `ml-metaoptimization` even if warning checks
+  were recorded.
+- **Fail:** one or more non-warning checks remain failed. The artifact
+  contains actionable diagnostics for each failure.
 
 The skill exits after this phase regardless of outcome.
 
@@ -159,7 +178,7 @@ The skill exits after this phase regardless of outcome.
 | Property | Guarantee |
 |----------|-----------|
 | Evaluation | Stateless — always evaluates from scratch, never reads prior artifacts to decide behavior |
-| Bootstrap mutations | Individually idempotent — applying to an already-ready environment is a no-op |
+| Bootstrap mutations | Repo bootstrap is individually idempotent; backend bootstrap is advisory-only and performs no automated remediation |
 | Readiness artifact | Overwritten on each run — latest is authoritative |
 | Campaign state | Never touched — preflight does not read or write `.ml-metaopt/state.json` |
 | Side effects | Limited to bootstrap mutations and the readiness artifact |
@@ -205,8 +224,8 @@ independently computes the same hash and compares it to the artifact's value.
 If the campaign YAML was edited after preflight ran (changing name, objective,
 or WandB target), the hashes will not match and the orchestrator emits
 `BLOCKED_CONFIG: "Campaign config changed since last preflight — re-run
-metaopt-preflight"`. The same mismatch check occurs at `HYDRATE_STATE` when
-resuming an existing campaign.
+metaopt-preflight"`. Artifact consumption and freshness checks are part of
+`LOAD_CAMPAIGN`; `HYDRATE_STATE` assumes that gate has already passed.
 
 This does not give preflight resume semantics — it remains a one-shot skill
 with no persisted state of its own. The hash is simply an artifact field that
