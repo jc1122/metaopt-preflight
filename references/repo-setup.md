@@ -162,12 +162,12 @@ artifact are computed using the canonicalization rules defined in
 `ml-metaoptimization/references/contracts.md`. Preflight does not define its
 own identity scheme.
 
-Freshness considerations: repo structural readiness is primarily a
-**Tier 1 (binding)** signal — if the campaign file changes, hash mismatches
-will invalidate the artifact. However, some repo conditions (repo-operation state,
-dataset file presence) are **Tier 2 (operational)** — they can change after
-the artifact is emitted. See `references/readiness-artifact.md` § Freshness
-tiers.
+Freshness considerations: the campaign fields used by repo checks R7-R9 are
+partly covered by binding hashes, but local scaffold state is operational. If
+`.ml-metaopt/` directories or `.gitignore` change after the artifact is
+emitted, the artifact can become operationally stale without a campaign hash
+change. Git operation state and dataset file presence are not current repo
+checks.
 
 ---
 

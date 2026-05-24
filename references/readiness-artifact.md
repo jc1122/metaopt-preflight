@@ -190,13 +190,14 @@ artifact may have `status` of either `READY` or `FAILED`. The orchestrator
 evaluates `status` as a separate readiness-outcome check after confirming
 binding freshness — see the Orchestrator Consumption Protocol below.
 
-**Rationale:** The campaign identity hash covers the campaign's structural
-identity (objective, datasets). The runtime config hash covers operational
-configuration (execution, queue backend, sanity, artifacts). Together they
-are intended to ensure the artifact was produced for the exact campaign
-configuration the orchestrator is about to execute. In v4, only the
-campaign identity hash is actively checked (see v4 implementation note
-above).
+**Rationale:** The campaign identity hash covers the v4 orchestrator identity
+fields: `campaign.name`, `objective.metric`, `objective.direction`,
+`wandb.entity`, and `wandb.project`. The runtime config hash covers the
+current operational fields: the full `compute` block, `wandb.entity`,
+`wandb.project`, `project.repo`, and `project.smoke_test_command`. Together
+they are intended to ensure the artifact was produced for the exact campaign
+configuration the orchestrator is about to execute. In v4, only the campaign
+identity hash is actively checked (see v4 implementation note above).
 
 ### Tier 2 — Operational Freshness (requires preflight rerun)
 
@@ -205,7 +206,8 @@ comparison alone:
 
 - Backend reachability (network state may have changed)
 - Runtime dependency availability (tools may have been uninstalled)
-- Repository operation state (a merge or rebase may have started)
+- Local `.ml-metaopt/` scaffold state (directories or `.gitignore` may have
+  changed)
 - Credential validity (tokens may have expired)
 
 The readiness artifact does not guarantee these conditions remain true after

@@ -439,12 +439,21 @@ class TestBackendContractWording(unittest.TestCase):
         self.assertIn("checks_summary.warnings", text)
         self.assertIn("backend bootstrap", text)
         self.assertIn("advisory-only", text)
+        self.assertIn("repo check r7 remains the hard presence gate", text)
 
     def test_readiness_artifact_documents_current_failure_categories(self):
         text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
         self.assertIn('Current emitted values are `"backend"` and `"repo"`.', text)
         self.assertIn('`category="warning"`', text)
         self.assertIn("do **not** appear in\n`failures`", text)
+
+    def test_readiness_artifact_hash_fields_match_current_hash_utils(self):
+        text = _read(os.path.join(REFERENCES_DIR, "readiness-artifact.md"))
+        self.assertIn("`campaign.name`, `objective.metric`, `objective.direction`", text)
+        self.assertIn("the full `compute` block", text)
+        self.assertIn("`project.repo`, and `project.smoke_test_command`", text)
+        self.assertNotIn("objective, datasets", text)
+        self.assertNotIn("execution, queue backend, sanity, artifacts", text)
 
 
 if __name__ == "__main__":

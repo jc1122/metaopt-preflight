@@ -41,9 +41,11 @@ establish a **minimal ready state** — the minimum conditions under which
 `skypilot-wandb-worker` operations to succeed.
 
 Hard-failure backend checks must pass for the readiness artifact to emit
-`status: "READY"`. Warning-category checks are advisory: they increment
-`checks_summary.warnings`, may be summarized in `diagnostics`, and do **not**
-block readiness on their own.
+`status: "READY"`. Warning-category backend checks are advisory: they
+increment `checks_summary.warnings`, may be summarized in `diagnostics`, and do
+**not** create backend failure records on their own. This does not weaken hard
+repository checks over the same field; for example, missing
+`project.smoke_test_command` still fails repo check R7.
 
 ### Check catalog
 
@@ -53,12 +55,12 @@ block readiness on their own.
 | **Vast.ai configured** | `backend` | Yes | SkyPilot can reach the Vast.ai provider | Run `sky check --cloud vast` and verify Vast.ai is reported as enabled |
 | **WandB credentials** | `backend` | Yes | WandB API access is configured | Check that `WANDB_API_KEY` is set, or that `~/.netrc` contains an `api.wandb.ai` entry |
 | **Project repo accessible** | `backend` | Yes | `project.repo` git URL can be reached | Verify git credentials allow access via `git ls-remote --exit-code` against the URL |
-| **Smoke test command present** | `warning` | No | `project.smoke_test_command` is syntactically non-empty | Verify the field is a non-empty string in the campaign spec. Preflight does **not** execute the command — execution happens during `LOCAL_SANITY` at runtime via `skypilot-wandb-worker` |
+| **Smoke test command present** | `warning` | No additional backend blocker | Duplicate advisory check for `project.smoke_test_command` | Records a warning-category backend result. The authoritative presence requirement is hard repo check R7; preflight does **not** execute the command. |
 
-All blocking checks in this table must pass for the readiness artifact to emit
-`status: "READY"`. Warning-category results do **not** populate `failures[]`;
-instead they increment `checks_summary.warnings` and may be summarized in
-`diagnostics`.
+All blocking backend checks in this table must pass for backend readiness.
+Warning-category backend results do **not** populate `failures[]`; instead they
+increment `checks_summary.warnings` and may be summarized in `diagnostics`.
+They do not override hard repo failures.
 
 ### What is NOT part of backend readiness
 

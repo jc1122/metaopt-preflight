@@ -39,17 +39,23 @@ Preflight verifies that the runtime environment can support a campaign:
 - WandB credentials — can runtime authenticate via `WANDB_API_KEY` or
   `~/.netrc`?
 - Project repo reachability — can the configured `project.repo` be reached?
-- Smoke test declaration — is `project.smoke_test_command` present? This is a
-  warning-category advisory check, not a readiness blocker.
+- Smoke test declaration — backend checks record a warning-category advisory
+  result, while repo check R7 remains the hard presence gate for
+  `project.smoke_test_command`.
 
 ### 2. Repository readiness evaluation
 
-Preflight verifies that the target repository is in a state compatible with
-`ml-metaoptimization`:
+Preflight verifies the target repository through the current R1-R9 repo-check
+contract:
 
-- Required file presence — does `ml_metaopt_campaign.yaml` exist and parse?
-- Directory structure — is the expected layout present or creatable?
-- Git state — is the repository free of interrupted or conflicted operations?
+- Local `.ml-metaopt/` directory and required subdirectories exist or are
+  scaffoldable.
+- Root `.gitignore` excludes `.ml-metaopt/` or can be updated safely.
+- `project.smoke_test_command`, required top-level campaign keys, and
+  `project.repo` are present. These are presence-only checks.
+
+Git repository state, campaign-file discovery/YAML parsing, and dataset-path
+existence are not current R1-R9 repo checks.
 
 ### 3. Bounded bootstrap mutations
 
