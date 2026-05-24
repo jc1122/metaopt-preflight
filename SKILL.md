@@ -1,8 +1,9 @@
 ---
 name: metaopt-preflight
 description: >
-  One-shot idempotent preflight skill that validates backend, repository, and
-  environment readiness before an ml-metaoptimization campaign begins.
+  Codex-usable, one-shot idempotent preflight skill that validates backend,
+  repository, and environment readiness before an ml-metaoptimization campaign
+  begins.
 ---
 
 # metaopt-preflight
@@ -11,13 +12,14 @@ description: >
 
 **Lane type:** standalone / one-shot
 **Model class:** strong_reasoner
-**State mutation:** bounded idempotent bootstrap mutations only (detailed boundaries TBD)
+**State mutation:** bounded idempotent bootstrap mutations only; see "Current filesystem side effects" and `references/boundary.md`.
 
-This skill is a **one-shot preflight phase** that runs before the
-`ml-metaoptimization` orchestrator enters its campaign loop. It evaluates
-whether the environment, backend, and repository are ready for a campaign,
-performs bounded bootstrap mutations when necessary to achieve readiness, and
-emits a persisted readiness artifact that gates `ml-metaoptimization` entry.
+This skill is a **one-shot preflight phase** that Codex or any other CLI can
+invoke directly before the `ml-metaoptimization` orchestrator enters its
+campaign loop. It evaluates whether the environment, backend, and repository
+are ready for a campaign, performs bounded repo bootstrap mutations when
+necessary to achieve readiness, and emits a persisted readiness artifact that
+gates `ml-metaoptimization` entry.
 
 A single invocation covers the full preflight lifecycle. The skill does not
 resume, does not loop, and does not participate in the campaign state machine.
@@ -27,14 +29,16 @@ resume, does not loop, and does not participate in the campaign state machine.
 ### What this skill owns
 
 - **Environment and backend readiness evaluation** — verifying that runtime
-  dependencies, backend connectivity, and queue infrastructure are functional.
+  dependencies, backend connectivity, and required credentials/access are present.
 - **Repository readiness evaluation** — verifying that the target repository
   has the required structure, files, and configuration for a campaign.
 - **Bounded bootstrap mutations** — performing idempotent setup actions
-  (e.g., backend/delegation provisioning, metaopt directory scaffolding,
-  declared repo-preparation steps) required to bring the environment to a
-  ready state. All mutations must be idempotent and bounded to bootstrap
-  concerns; they must not touch experiment-specific code or campaign state.
+  required to bring the local repository into a ready state. In the current
+  executable behavior, this means `.ml-metaopt/` scaffolding and `.gitignore`
+  updates under the target `--cwd`; backend failures produce guidance but are
+  not auto-remediated by the CLI. All mutations must stay bounded to
+  bootstrap concerns and must not touch experiment-specific code or campaign
+  state.
 - **Persisted readiness signal** — producing a readiness artifact that
   `ml-metaoptimization` consumes to confirm safe campaign entry. The artifact
   persists on disk so downstream consumers can read it without re-running
@@ -83,6 +87,10 @@ The skill exits after the Emit phase regardless of outcome. There is no retry
 loop internal to the skill; the caller may re-invoke if failures are
 remediated externally.
 
+Input parsing failures are earlier than Emit: if `--campaign` is missing,
+unreadable, or malformed, the CLI exits with code `2` and does not write a
+readiness artifact.
+
 ## Idempotency and rerun semantics
 
 - **Idempotent by design.** Running preflight twice against the same
@@ -97,18 +105,32 @@ remediated externally.
 - **Safe to re-invoke.** Because mutations are idempotent and evaluation is
   stateless, re-invocation after external remediation or environment changes
   is the intended recovery path.
+- **No resume.** There is no persisted machine state to resume; each run is a
+  fresh one-shot invocation.
 
 ## Invocation
 
-```bash
-# Preferred (works from any directory):
-python3 -m scripts.run_preflight --campaign path/to/campaign.yaml [--cwd /project/root]
+Codex command shape from the repo root:
 
-# Also works (must be run from repo root):
-python3 scripts/run_preflight.py --campaign path/to/campaign.yaml [--cwd /project/root]
+```bash
+# Preferred for Codex or any shell automation (run from the repo root):
+python3 -m scripts.run_preflight \
+  --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
+  --cwd /absolute/path/to/project-root
+
+# Direct script form from the repo root:
+python3 scripts/run_preflight.py \
+  --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
+  --cwd /absolute/path/to/project-root
 ```
 
 Exit codes: `0` = READY, `1` = FAILED, `2` = usage/input error.
+
+`--campaign` identifies the YAML file to parse. `--cwd` identifies the target
+project root where preflight evaluates readiness, may scaffold `.ml-metaopt/`,
+and writes `.ml-metaopt/preflight-readiness.json`.
+
+Use absolute paths for both flags so the invocation is unambiguous.
 
 ### CLI arguments
 
@@ -134,7 +156,7 @@ fields needed to compute artifact hashes and scope readiness checks. It does
 | `wandb.project` | WandB connectivity check; included in `campaign_identity_hash` |
 | `project.repo` | Repository structure validation |
 | `project.smoke_test_command` | Smoke-test availability check (if declared) |
-| `compute.*` | Backend/delegation infrastructure readiness checks |
+| `compute.*` | Included in `runtime_config_hash` for freshness; current executable backend checks do not validate compute-specific fields |
 
 ### Environment variables
 
@@ -152,8 +174,9 @@ execute shell commands and read/write files is sufficient.
 ## Output contract
 
 The output is a **readiness artifact** persisted at
-`.ml-metaopt/preflight-readiness.json`. The full schema and freshness rules
-are defined in `references/readiness-artifact.md`.
+`.ml-metaopt/preflight-readiness.json` under the requested `--cwd`. The full
+schema and freshness rules are defined in
+`references/readiness-artifact.md`.
 
 Key fields:
 
@@ -168,7 +191,7 @@ Key fields:
 | `preflight_duration_seconds` | number | Wall-clock duration of the preflight invocation in seconds. |
 | `checks_summary` | object | Aggregate counts: `total`, `passed`, `failed`, `bootstrapped`, `warnings`. |
 | `failures` | array | Failure records with `check_id`, `category`, `message`, `remediation`. Empty when `READY`. |
-| `next_action` | string | `"proceed"` when `READY`; remediation guidance when `FAILED`. |
+| `next_action` | string | `"proceed"` when `READY`; otherwise a short fix summary derived from the remaining failures. |
 | `diagnostics` | string or null | Free-form notes (bootstrap actions taken, warnings). |
 
 **Status semantics:** `READY` means all checks passed and
@@ -195,20 +218,34 @@ be re-verified without re-running preflight.
 **Overwrite semantics:** Each invocation overwrites any prior artifact. The
 latest on disk is always authoritative.
 
+## Current filesystem side effects
+
+Preflight may:
+
+- create `.ml-metaopt/` scaffolding under `--cwd`
+- create or append the root `.gitignore` entry for `.ml-metaopt/`
+- overwrite `.ml-metaopt/preflight-readiness.json`
+
+Preflight must not write `.ml-metaopt/state.json`, `AGENTS.md`, experiment
+code, commits, or remote backend resources.
+
 ## Behavioral rules
 
 1. The skill MUST be idempotent — running it twice produces the same result.
 2. The skill MUST complete in a single invocation (no resumption, no
    persisted machine state).
-3. The skill MAY perform bounded idempotent bootstrap mutations (e.g.,
-   backend/delegation setup, metaopt scaffolding, declared repo-preparation
-   steps) required for metaoptimization readiness. It MUST NOT make
-   experiment-specific code changes or modify campaign state.
-4. The skill MUST produce a clear pass/fail signal with actionable
+3. The skill MAY perform bounded idempotent bootstrap mutations required for
+   readiness. In the current executable behavior, those mutations are limited
+   to repo scaffolding such as `.ml-metaopt/` directories and the
+   `.gitignore` entry. Backend issues are surfaced as diagnostics and failure
+   records rather than auto-remediated.
+4. The skill MUST write the readiness artifact to
+   `.ml-metaopt/preflight-readiness.json` when execution reaches Emit.
+5. The skill MUST NOT write `.ml-metaopt/state.json`, the `AGENTS.md` resume
+   hook, experiment code, commits, or remote backend resources.
+6. The skill MUST produce a clear pass/fail signal with actionable
    diagnostics on failure.
-5. The skill MUST NOT read or write `.ml-metaopt/state.json` or the
-   `AGENTS.md` resume hook.
-6. The skill MUST remain independently invocable — it must not depend on
+7. The skill MUST remain independently invocable — it must not depend on
    orchestrator internals or require the orchestrator to be running.
 
 Detailed mutation boundaries are specified in the backend and repo setup
@@ -230,7 +267,7 @@ contracts. See `references/backend-setup.md` for backend bootstrap actions and
 
 **Read `references/context-window-guide.md` before your first action.** It tells you exactly which files to read, when, and which to skip to stay within your context budget.
 
-TL;DR: read `SKILL.md` + `references/readiness-artifact.md` + the campaign YAML at the start of every invocation. Reach for the other reference docs only when debugging a specific check failure. Never read `tests/`, `scripts/bootstrap/`, or orchestrator source. Estimated budget: ~2000–4000 tokens before check results.
+TL;DR: read `README.md` + `SKILL.md` + the campaign YAML at the start of every invocation. Reach for `references/readiness-artifact.md` only when you need exact artifact field semantics, freshness rules, or overwrite/latest-wins details, and reach for other reference docs only when debugging a specific check failure. Never read `tests/`, `scripts/bootstrap/`, or orchestrator source by default. Estimated budget: ~2000-4000 tokens before check results.
 
 ## References
 

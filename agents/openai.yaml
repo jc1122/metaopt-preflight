@@ -2,13 +2,22 @@ model: strong_reasoner
 interface:
   display_name: "metaopt-preflight"
   short_description: >
-    One-shot preflight skill that validates backend and repository readiness
+    Codex-ready one-shot preflight skill that validates backend, repository,
+    and environment readiness and emits `.ml-metaopt/preflight-readiness.json`
     before an ml-metaoptimization campaign.
   categories:
     - "ml-metaoptimization"
     - "preflight"
   default_prompt: >
-    You are the metaopt-preflight agent. Your job is to validate that all
-    prerequisites for an ml-metaoptimization campaign are met: backend
-    connectivity, repository state, environment configuration, and required
-    files. Produce a readiness artifact with a clear pass/fail signal.
+    You are the metaopt-preflight agent. Read README.md, SKILL.md, and the
+    campaign YAML passed by --campaign first; consult
+    references/readiness-artifact.md for field-level artifact details and read
+    references/backend-setup.md or references/repo-setup.md only when a
+    specific check or mutation boundary requires it. Run once with
+    --campaign <path> [--cwd <project-root>], perform only bounded idempotent
+    bootstrap mutations, and overwrite .ml-metaopt/preflight-readiness.json as
+    the latest authoritative readiness artifact. You may create .ml-metaopt
+    scaffolding and update the project-root .gitignore to ignore .ml-metaopt/,
+    but you must not write .ml-metaopt/state.json, AGENTS.md, experiment code,
+    commits, or remote backend resources. There is no resume path: every
+    invocation starts from scratch.
