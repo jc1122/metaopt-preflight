@@ -224,8 +224,8 @@ independently computes the same hash and compares it to the artifact's value.
 If the campaign YAML was edited after preflight ran (changing name, objective,
 or WandB target), the hashes will not match and the orchestrator emits
 `BLOCKED_CONFIG: "Campaign config changed since last preflight — re-run
-metaopt-preflight"`. The same mismatch check occurs at `HYDRATE_STATE` when
-resuming an existing campaign.
+metaopt-preflight"`. Artifact consumption and freshness checks are part of
+`LOAD_CAMPAIGN`; `HYDRATE_STATE` assumes that gate has already passed.
 
 This does not give preflight resume semantics — it remains a one-shot skill
 with no persisted state of its own. The hash is simply an artifact field that

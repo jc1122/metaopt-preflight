@@ -278,6 +278,15 @@ class TestConsumptionPointConsistency(unittest.TestCase):
             "artifact is consumed during LOAD_CAMPAIGN only",
         )
 
+    def test_boundary_places_freshness_gate_at_load_campaign_only(self):
+        text = _read(os.path.join(REFERENCES_DIR, "boundary.md"))
+        section_marker = "### Campaign-change detection via identity hash"
+        self.assertIn(section_marker, text)
+        section = text.split(section_marker, 1)[1].split("\n## ", 1)[0]
+        self.assertIn("`LOAD_CAMPAIGN`", section)
+        self.assertIn("`HYDRATE_STATE` assumes that gate has already passed", section)
+        self.assertNotIn("mismatch check occurs at `HYDRATE_STATE`", section)
+
 
 class TestReadmeValidationSection(unittest.TestCase):
     """README must include a validation section explaining how to run tests."""
@@ -454,6 +463,13 @@ class TestBackendContractWording(unittest.TestCase):
         self.assertIn("`project.repo`, and `project.smoke_test_command`", text)
         self.assertNotIn("objective, datasets", text)
         self.assertNotIn("execution, queue backend, sanity, artifacts", text)
+
+    def test_backend_setup_does_not_claim_v4_runtime_hash_enforcement(self):
+        text = _read(os.path.join(REFERENCES_DIR, "backend-setup.md"))
+        section = text.split("## `runtime_config_hash`", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("future orchestrator versions can\nuse it for binding freshness", section)
+        self.assertIn("v4 does not read or validate `runtime_config_hash`", section)
+        self.assertNotIn("The orchestrator uses it for binding freshness", section)
 
 
 if __name__ == "__main__":

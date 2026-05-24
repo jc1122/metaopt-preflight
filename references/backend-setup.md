@@ -142,16 +142,17 @@ The readiness artifact includes a `runtime_config_hash` field. In v4 this
 hash covers `compute`, `wandb`, `project.repo`, and
 `project.smoke_test_command` from the campaign spec.
 
-Preflight computes this hash using the same canonicalization rules as
-`ml-metaoptimization` (see `ml-metaoptimization/references/contracts.md`
-§ Identity Hash Computation). The orchestrator uses it for binding freshness
-— verifying that the environment preflight checked matches the campaign
-configuration the orchestrator is about to run.
+Preflight computes this hash using the same canonicalization rules intended
+for `ml-metaoptimization` (see `ml-metaoptimization/references/contracts.md`
+§ Identity Hash Computation). It is emitted so future orchestrator versions can
+use it for binding freshness, verifying that the backend-related configuration
+preflight checked matches the campaign configuration the orchestrator is about
+to run.
 
-**Current status:** v4 does not validate `runtime_config_hash` at campaign
-entry. The field is emitted by preflight and reserved for v5+ orchestrator
-validation. Preflight must still compute and include it so the artifact
-schema is forward-compatible.
+**Current status:** v4 does not read or validate `runtime_config_hash` at
+campaign entry. The field is emitted by preflight and reserved for v5+
+orchestrator validation. Preflight must still compute and include it so the
+artifact schema is forward-compatible.
 
 ## Out of scope
 
