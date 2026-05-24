@@ -348,21 +348,59 @@ class TestPreflightDurationField(unittest.TestCase):
 # ── R8 key correctness ─────────────────────────────────────────────────
 
 
-class TestRepoSetupKeyCorrectness(unittest.TestCase):
-    """repo-setup.md R3 must list campaign_id, not campaign_name."""
+class TestRepoSetupCurrentContract(unittest.TestCase):
+    """repo-setup.md must match the implemented repo check contract."""
 
-    def test_repo_setup_mentions_campaign_key_not_campaign_name(self):
+    def test_repo_setup_documents_current_r1_to_r9_meanings(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        expected_rows = (
+            "| R1 | `.ml-metaopt/` directory exists |",
+            "| R2 | Root `.gitignore` excludes `.ml-metaopt/` |",
+            "| R3 | `.ml-metaopt/handoffs/` exists |",
+            "| R4 | `.ml-metaopt/worker-results/` exists |",
+            "| R5 | `.ml-metaopt/tasks/` and `.ml-metaopt/executor-events/` exist |",
+            "| R6 | `.ml-metaopt/artifacts/{code,data,manifests,patches}/` all exist |",
+            "| R7 | `project.smoke_test_command` is present and non-empty |",
+            "| R8 | Required top-level campaign keys are present |",
+            "| R9 | `project.repo` is present and non-empty |",
+        )
+        for row in expected_rows:
+            self.assertIn(row, text)
+
+    def test_repo_setup_documents_current_required_top_level_keys(self):
         text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
         self.assertIn(
-            "campaign_id",
+            "Top-level keys `campaign`, `project`, `wandb`, `compute`, and `objective` are all present.",
             text,
-            "repo-setup.md must list campaign_id as a required key",
         )
-        self.assertNotIn(
-            "campaign_name",
+        self.assertIn(
+            "It does **not** require a top-level `campaign_id` or `campaign_name`.",
             text,
-            "repo-setup.md must NOT list campaign_name as a required key",
         )
+
+    def test_repo_setup_marks_old_git_and_dataset_checks_as_not_current_r_checks(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        self.assertIn(
+            "Git repository detection and merge/rebase hygiene are not currently checked",
+            text,
+        )
+        self.assertIn(
+            "Campaign file discovery and YAML parseability are handled before repo checks",
+            text,
+        )
+        self.assertIn(
+            "run; they are not numbered repo checks.",
+            text,
+        )
+        self.assertIn(
+            "Dataset-path existence is not checked by the current repo checks.",
+            text,
+        )
+
+    def test_repo_setup_uses_current_repo_failure_category(self):
+        text = _read(os.path.join(REFERENCES_DIR, "repo-setup.md"))
+        self.assertIn('`category: "repo"`', text)
+        self.assertNotIn('`category: "repository"`', text)
 
 
 # ── Boundary doc hash/resume gate ──────────────────────────────────────
