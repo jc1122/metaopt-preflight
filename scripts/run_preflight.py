@@ -28,8 +28,9 @@ try:
     from scripts.checks.backend_checks import run_all_backend_checks
     from scripts.checks.repo_checks import CheckResult, run_all_repo_checks
 except ImportError:
-    # Direct script invocation: python3 scripts/run_preflight.py
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    repo_root = Path(__file__).resolve().parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
     from scripts._artifact_utils import build_artifact, write_artifact
     from scripts._hash_utils import (
         compute_campaign_identity_hash,
@@ -41,6 +42,17 @@ except ImportError:
     from scripts.checks.repo_checks import CheckResult, run_all_repo_checks
 
 _STATE_DIR_NAME = ".ml-metaopt"
+
+
+def _resolve_cwd(value: str | Path) -> Path:
+    return Path(value).expanduser().resolve()
+
+
+def _resolve_campaign_path(value: str | Path, cwd: Path) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    return (cwd / path).resolve()
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -94,6 +106,8 @@ def run_preflight(
 ) -> int:
     """Execute the 4-phase preflight flow. Returns exit code."""
     start = time.monotonic()
+    cwd = _resolve_cwd(cwd)
+    campaign_path = _resolve_campaign_path(campaign_path, cwd)
 
     # ── Phase 1: Gather ──────────────────────────────────────────────
     if not campaign_path.is_file():
@@ -103,6 +117,9 @@ def run_preflight(
     try:
         raw = campaign_path.read_text(encoding="utf-8")
         campaign = yaml.safe_load(raw)
+    except OSError as exc:
+        print(f"Error: could not read campaign YAML: {exc}", file=sys.stderr)
+        return 2
     except yaml.YAMLError as exc:
         print(f"Error: malformed campaign YAML: {exc}", file=sys.stderr)
         return 2
@@ -205,8 +222,8 @@ def run_preflight(
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    campaign_path = Path(args.campaign)
-    cwd = Path(args.cwd).resolve()
+    cwd = _resolve_cwd(args.cwd)
+    campaign_path = _resolve_campaign_path(args.campaign, cwd)
     return run_preflight(campaign_path, cwd)
 
 
