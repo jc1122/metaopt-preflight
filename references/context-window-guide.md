@@ -1,32 +1,34 @@
 # Context Window Guide for Preflight
 
-This document tells the preflight agent exactly which files to read, when,
-and which files to skip entirely. Preflight is a one-shot agent — it reads
-docs once, runs checks, and emits a readiness artifact. There is no
-multi-turn loop and no re-entry, so the guide is simple.
+This guide tells a Codex operator exactly which files to read before invoking
+`metaopt-preflight`, when to reach for additional references, and which paths
+to skip entirely. Preflight is a one-shot skill — it reads a small contract
+surface, runs checks once, applies only bounded bootstrap mutations, and
+overwrites the readiness artifact. There is no multi-turn loop, no resume, and
+no need for a broad repository dump.
 
 ---
 
-## TL;DR — read this, skip everything else
+## TL;DR — first read, then stop
 
-| Moment | Must read | Must NOT read |
+| Moment | Read first | Do not read by default |
 |---|---|---|
-| Every invocation | `SKILL.md`, `references/readiness-artifact.md`, campaign YAML | `tests/`, `scripts/bootstrap/`, orchestrator source, this file |
+| Every invocation | `README.md`, `SKILL.md`, campaign YAML | `tests/`, `scripts/bootstrap/`, downstream orchestrator source, broad repo listings |
 
 ---
 
-## ALWAYS READ (on every invocation)
+## READ FIRST (on every invocation)
 
-Read these at the start of every run:
+Read these in order at the start of every run:
 
 | File | Why |
 |---|---|
-| `SKILL.md` | Input contract, lifecycle phases, output schema, behavioral rules |
-| `references/readiness-artifact.md` | Exact artifact schema you must emit, freshness rules, field semantics |
+| `README.md` | Exact command shape (`--campaign`, optional `--cwd`) and high-level contract |
+| `SKILL.md` | Lifecycle phases, one-shot/no-resume rules, output contract, behavioral rules |
 | Campaign YAML (path from `--campaign` arg) | The file you are validating — needed for hash computation and check scoping |
 
-These three sources are everything you need to execute the full
-Gather → Evaluate → Bootstrap → Emit lifecycle. Do not skip any of them.
+These three sources are enough for a normal run. Do not start by dumping
+additional docs or implementation files into context.
 
 ---
 
@@ -36,6 +38,7 @@ Only read these if you hit a specific problem during the run:
 
 | File | When to read |
 |---|---|
+| `references/readiness-artifact.md` | You need exact field semantics, freshness rules, or overwrite/latest-wins details for `.ml-metaopt/preflight-readiness.json` |
 | `references/repo-setup.md` | Debugging which R-check failed or what a repo bootstrap mutation should do |
 | `references/backend-setup.md` | Debugging which backend check failed or what remediation to suggest |
 | `references/boundary.md` | Clarifying scope — does this action belong in preflight or in the orchestrator? |
@@ -44,6 +47,21 @@ Only read these if you hit a specific problem during the run:
 
 Most runs will not need any of these. Reach for them only when a check
 behaves in a way that the SKILL.md description does not explain.
+
+## Mutation guardrails at a glance
+
+Allowed local filesystem side effects:
+
+- Create `.ml-metaopt/` scaffolding, including `.ml-metaopt/artifacts/{code,data,manifests,patches}` and `.ml-metaopt/{handoffs,worker-results,tasks,executor-events}`.
+- Create or update the project-root `.gitignore` so `.ml-metaopt/` is ignored.
+- Overwrite `.ml-metaopt/preflight-readiness.json`. The latest artifact on disk is always authoritative.
+
+Disallowed side effects:
+
+- Writing `.ml-metaopt/state.json` or `AGENTS.md`.
+- Modifying experiment code or other campaign-phase outputs.
+- Creating commits or other git history changes.
+- Creating remote backend resources.
 
 ---
 
@@ -54,21 +72,22 @@ behaves in a way that the SKILL.md description does not explain.
 | `tests/` | Test files are not needed during a preflight run |
 | `scripts/bootstrap/` | Bootstrap runs automatically via the check pipeline; you don't invoke or read it directly |
 | `/home/jakub/projects/ml-metaoptimization/` | Preflight does not need orchestrator source — the interface is the readiness artifact only |
-| `references/context-window-guide.md` | This file itself — you are already following it |
+| Large repo-wide file listings | Broad dumps waste context and are unnecessary for a normal preflight invocation |
 
 ---
 
 ## Context budget note
 
-Preflight is small. All ALWAYS READ docs fit comfortably in a single
+Preflight is small. The READ FIRST set fits comfortably in a single
 context window:
 
 | Source | Approx size |
 |---|---|
+| `README.md` | ~160 lines |
 | `SKILL.md` | ~200 lines |
-| `references/readiness-artifact.md` | ~100 lines |
 | Campaign YAML | Typically < 50 lines |
 | **Total before check results** | **~2000–4000 tokens** |
 
-There is no multi-turn accumulation — the agent reads once, executes, and
-exits. Context pressure is not a concern for this skill.
+There is no multi-turn accumulation — the agent reads once, executes, writes
+the latest readiness artifact, and exits. Context pressure stays low as long
+as you avoid unnecessary repo-wide reads.
