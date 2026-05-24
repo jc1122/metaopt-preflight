@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Adapted the preflight contract and runtime documentation for Codex execution:
+  repo-root invocations now use explicit `--campaign` and `--cwd` inputs,
+  readiness artifacts are emitted under the target `.ml-metaopt/` directory,
+  backend bootstrap remains advisory, and compatibility tests cover the
+  `ml-metaoptimization` handoff.
+
+### Validation
+- 2026-05-24: final integrated B01-B03 readiness audit passed
+  `python3 -m pytest -q` and
+  `python3 -m unittest discover -s tests -p 'test_*.py'`.
+
 ## [1.0.0] — 2026-04-13
 
 ### Added
