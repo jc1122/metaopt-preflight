@@ -26,95 +26,64 @@ content, experiment code, or application logic.
 
 ---
 
-## Prerequisite: the target project must be a git repository
+## Current repo ready state (R1-R9)
 
-Preflight **requires** that the target project already be a git repository
-with at least one commit. It does not run `git init` or create initial
-commits.
-
-**Rationale:** `ml-metaoptimization` depends on git worktrees, which require
-a repository with history. Initializing git in an arbitrary directory is a
-destructive assumption that does not belong in a readiness check.
-
-If the target directory is not a git repository, preflight emits
-`status: "FAILED"` with a remediation message directing the user to
-initialize the repository themselves.
-
----
-
-## Minimal repo ready state
-
-These conditions must all hold before the orchestrator can start its campaign
-loop. Preflight evaluates each one and may bootstrap those marked as
-scaffoldable.
+The current implementation in `scripts/checks/repo_checks.py` defines repo
+readiness as nine concrete checks. Preflight evaluates them in order and may
+bootstrap only the ones marked scaffoldable.
 
 ### Required conditions
 
 | # | Condition | Scaffoldable | Verification method |
 |---|-----------|:------------:|---------------------|
-| R1 | Target directory is a git repository with ≥1 commit | No | `git rev-parse --git-dir` succeeds and `git rev-list -1 HEAD` succeeds |
-| R2 | `ml_metaopt_campaign.yaml` exists and is parseable YAML | No | File exists at `{project_root}/ml_metaopt_campaign.yaml` and parses without error |
-| R3 | Campaign file has basic structure (required top-level keys present) | No | Top-level keys `version`, `campaign_id`, `objective`, `datasets`, `sanity`, `artifacts`, `remote_queue`, `execution` are present. No deep value validation — that is `LOAD_CAMPAIGN`'s job. |
-| R4 | `.ml-metaopt/` directory exists | **Yes** | Directory exists at `{project_root}/.ml-metaopt/` |
-| R5 | `.ml-metaopt/` subtree exists (artifact subdirs + operational subdirs) | **Yes** | All eight subdirectories exist: `.ml-metaopt/artifacts/{code,data,manifests,patches}` and `.ml-metaopt/{handoffs,worker-results,tasks,executor-events}` |
-| R6 | Dataset paths declared in campaign spec exist (local paths only) | No | For each `datasets[].local_path`, verify the file exists. Paths are relative to project root. |
-| R7 | Sanity command is syntactically non-empty | No | `sanity.command` is a non-empty string. Preflight does not execute it. |
-| R8 | Repository is not in a conflicted or interrupted operation state | No | `HEAD` resolves to a valid commit. No merge or rebase is in progress. |
-| R9 | `.ml-metaopt/` is git-ignored (or ignorable) | **Yes** | `.ml-metaopt` appears in an active gitignore rule. If not, preflight may add it. |
+| R1 | `.ml-metaopt/` directory exists | **Yes** | `{project_root}/.ml-metaopt/` is a directory |
+| R2 | Root `.gitignore` excludes `.ml-metaopt/` | **Yes** | `{project_root}/.gitignore` exists and contains one of `.ml-metaopt/`, `.ml-metaopt`, or `.ml-metaopt/*` |
+| R3 | `.ml-metaopt/handoffs/` exists | **Yes** | `{project_root}/.ml-metaopt/handoffs/` is a directory |
+| R4 | `.ml-metaopt/worker-results/` exists | **Yes** | `{project_root}/.ml-metaopt/worker-results/` is a directory |
+| R5 | `.ml-metaopt/tasks/` and `.ml-metaopt/executor-events/` exist | **Yes** | Both directories exist under `{project_root}/.ml-metaopt/` |
+| R6 | `.ml-metaopt/artifacts/{code,data,manifests,patches}/` all exist | **Yes** | All four artifact subdirectories exist under `{project_root}/.ml-metaopt/artifacts/` |
+| R7 | `project.smoke_test_command` is present and non-empty | No | `project` exists and `project.smoke_test_command` is a non-empty string. Preflight does not execute it. |
+| R8 | Required top-level campaign keys are present | No | Top-level keys `campaign`, `project`, `wandb`, `compute`, and `objective` are all present. This is presence-only, not deep schema validation. |
+| R9 | `project.repo` is present and non-empty | No | `project` exists and `project.repo` is a non-empty string |
 
-### What "basic structure" means (R3)
+### What "required top-level keys" means (R8)
 
-Preflight checks for the *presence* of required top-level keys, not for the
-validity of their values. For example:
+R8 is intentionally shallow. It checks only for the presence of these five
+top-level keys:
 
-- ✅ `objective:` key exists → passes R3
-- ❌ `objective:` key missing → fails R3
-- ✅ `objective.metric: rmse` vs `objective.metric: mae` → not preflight's concern
-- ❌ `objective.metric` contains a sentinel placeholder → not preflight's concern (caught by `LOAD_CAMPAIGN`)
+- `campaign`
+- `project`
+- `wandb`
+- `compute`
+- `objective`
 
-This keeps the boundary clean: preflight confirms the campaign file is
-structurally present and plausibly complete; the orchestrator validates
-semantics.
+It does **not** require a top-level `campaign_id` or `campaign_name`.
+`scripts/run_preflight.py` derives the emitted readiness-artifact
+`campaign_id` from `campaign.name`, with flat `campaign_name` retained only
+as a runner fallback when `campaign.name` is absent. That extraction behavior
+is separate from repo readiness and does not change the R8 contract.
 
-### What R8 checks (repo-operation hygiene)
+### Smoke test command scope (R7)
 
-The orchestrator performs git operations (worktree creation, branching,
-patching) throughout the campaign. While these operations do not strictly
-require a pristine working tree, an interrupted merge or rebase indicates
-the repository is in a state that the operator should resolve before
-starting a campaign. Preflight checks:
+R7 checks only that `project.smoke_test_command` is a non-empty string.
+Preflight does **not** execute the command and does not validate whether it
+is runnable in the local shell, container, or backend environment. Runtime
+execution belongs to downstream phases, and backend-side command availability
+is covered by `references/backend-setup.md`.
 
-- `HEAD` resolves to a valid commit (required for any meaningful git operation).
-- No merge or rebase is in progress (`git status` does not report
-  merge/rebase state). An in-progress merge or rebase signals unfinished
-  operator work, not a technical blocker for worktree creation, but a
-  campaign should not begin on top of unresolved repository housekeeping.
+### Legacy or deferred items from older contract drafts
 
-Untracked files, unstaged changes, and the presence of `.git/index.lock`
-are **not** checked. Preflight does not require a fully clean working tree.
+Older drafts of this reference described additional repo checks that are **not
+part of the current R1-R9 implementation**:
 
-### Command path note (R7, and remote_queue/execution paths)
+- Git repository detection and merge/rebase hygiene are not currently checked
+  by `scripts/checks/repo_checks.py`.
+- Campaign file discovery and YAML parseability are handled before repo checks
+  run; they are not numbered repo checks.
+- Dataset-path existence is not checked by the current repo checks.
 
-Some paths in the campaign spec (e.g., `execution.entrypoint`,
-`remote_queue.enqueue_command`) are **container-side or backend-side paths**
-that do not resolve in the local repository. Preflight does not attempt to
-verify that these paths exist locally.
-
-Repo-level checks (R7) only confirm that command strings are non-empty and
-syntactically present. Backend-side command availability (verifying that
-queue commands resolve to executable paths on the head node) is a backend
-readiness concern covered by `references/backend-setup.md` § Queue commands
-available. Full command semantic validation is `LOAD_CAMPAIGN`'s
-responsibility.
-
-### Smoke test command scope
-
-`project.smoke_test_command` follows the same principle. Preflight verifies
-that the field is present and syntactically non-empty (no sentinel
-placeholders). Preflight does **not** execute it. Actual execution — with a
-hard 60-second timeout — is `LOCAL_SANITY`'s responsibility within
-`ml-metaoptimization`. `LOAD_CAMPAIGN` additionally validates that the value
-is a non-empty string with no sentinels (`YOUR_*`, `replace-me`, `<…>`).
+Keep those topics out of the R1-R9 table unless the implementation changes and
+the contract is updated with matching tests.
 
 ---
 
@@ -128,9 +97,9 @@ constraints in `references/boundary.md` § Bootstrap mutations.
 
 | ID | Trigger | Action | Idempotency |
 |----|---------|--------|-------------|
-| B1 | `.ml-metaopt/` directory missing (R4 fails) | `mkdir -p .ml-metaopt` | Creating an existing directory is a no-op |
-| B2 | Required subdirectories missing (R5 fails) | `mkdir -p .ml-metaopt/artifacts/{code,data,manifests,patches} .ml-metaopt/{handoffs,worker-results,tasks,executor-events}` | Creating existing directories is a no-op |
-| B3 | `.ml-metaopt` not in gitignore (R9 fails) | Append `.ml-metaopt/` to the project-root `.gitignore` (create the file if absent) | Re-appending a line already present is skipped; only adds if not already covered by an existing rule |
+| B1 | `.ml-metaopt/` directory missing (R1 fails) | `mkdir -p .ml-metaopt` | Creating an existing directory is a no-op |
+| B2 | Required `.ml-metaopt/` subdirectories missing (R3-R6 fail) | `mkdir -p .ml-metaopt/artifacts/{code,data,manifests,patches} .ml-metaopt/{handoffs,worker-results,tasks,executor-events}` | Creating existing directories is a no-op |
+| B3 | Root `.gitignore` missing or lacks a valid `.ml-metaopt` exclude rule (R2 fails) | Create `.gitignore` if needed, or append `.ml-metaopt/` in the project root | Re-appending a covered rule is skipped; `.ml-metaopt/`, `.ml-metaopt`, and `.ml-metaopt/*` all count as already covered |
 
 ### Bootstrap constraints
 
@@ -176,12 +145,13 @@ The following repo-level operations belong exclusively to
 
 Repo checks map to the readiness artifact as follows:
 
-- **`checks_summary.total`** includes all repo checks evaluated.
+- **`checks_summary.total`** includes all repo checks evaluated. The current
+  repo contract contributes 9 checks.
 - **`checks_summary.passed`** / **`failed`** reflect final post-bootstrap
   results.
 - **`checks_summary.bootstrapped`** counts checks that failed initially but
   passed after a scaffold mutation.
-- **`failures[]`** entries for repo checks use `category: "repository"` and
+- **`failures[]`** entries for repo checks use `category: "repo"` and
   include `check_id`, a human-readable `message`, and a `remediation` hint.
 - **`diagnostics`** may include notes on scaffold actions taken
   (e.g., "created `.ml-metaopt/artifacts/` subtree",
@@ -210,11 +180,12 @@ The following topics are explicitly outside this contract:
 | Full campaign schema validation (field values, sentinel detection) | `ml-metaoptimization` (`LOAD_CAMPAIGN`) |
 | Backend connectivity and queue readiness | `references/backend-setup.md` |
 | Runtime dependency checks (interpreters, libraries, tools) | Future environment-checks reference |
-| Detailed check IDs and pass/fail criteria | Future check-catalog reference |
-| Preflight input contract (configuration sources) | Future input-contract reference |
-| Deep semantic validation of dataset content | Not planned — preflight checks file presence only |
-| Code quality or test suite validation | Not planned — not a preflight concern |
-| Execution of sanity commands | `ml-metaoptimization` (`LOCAL_SANITY`) |
+| Detailed check IDs and pass/fail criteria beyond R1-R9 | Future check-catalog reference |
+| Preflight input contract (campaign path discovery, YAML load errors) | CLI input handling, not repo checks |
+| Git repository detection and repo-operation hygiene | Deferred unless repo checks grow to cover it |
+| Dataset path existence validation | Deferred unless repo checks grow to cover it |
+| Code quality or test suite validation | Not planned - not a preflight concern |
+| Execution of smoke test commands | `ml-metaoptimization` (`LOCAL_SANITY`) |
 | Verification of remote/container-side paths | `references/backend-setup.md` for backend paths; `LOAD_CAMPAIGN` for command validation |
 
 ---

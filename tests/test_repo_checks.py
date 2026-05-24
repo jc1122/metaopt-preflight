@@ -8,6 +8,7 @@ import pytest
 
 from scripts.checks.repo_checks import (
     CheckResult,
+    REQUIRED_TOP_LEVEL_KEYS,
     check_R1,
     check_R2,
     check_R3,
@@ -99,6 +100,18 @@ def test_R2_fails_when_entry_missing(fully_setup: Path) -> None:
 
 
 def test_R2_passes(fully_setup: Path) -> None:
+    result = check_R2(_MINIMAL_CAMPAIGN, fully_setup)
+    assert result.passed
+
+
+def test_R2_passes_when_entry_omits_trailing_slash(fully_setup: Path) -> None:
+    (fully_setup / ".gitignore").write_text(".ml-metaopt\n")
+    result = check_R2(_MINIMAL_CAMPAIGN, fully_setup)
+    assert result.passed
+
+
+def test_R2_passes_when_glob_entry_present(fully_setup: Path) -> None:
+    (fully_setup / ".gitignore").write_text(".ml-metaopt/*\n")
     result = check_R2(_MINIMAL_CAMPAIGN, fully_setup)
     assert result.passed
 
@@ -206,6 +219,26 @@ def test_R8_fails_when_key_absent(fully_setup: Path, missing_key: str) -> None:
     result = check_R8(campaign, fully_setup)
     assert not result.passed
     assert missing_key in result.message
+
+
+def test_R8_required_top_level_keys_match_contract() -> None:
+    assert REQUIRED_TOP_LEVEL_KEYS == frozenset(
+        {"campaign", "project", "wandb", "compute", "objective"}
+    )
+
+
+def test_R8_reports_sorted_missing_keys(fully_setup: Path) -> None:
+    campaign = {
+        "campaign": _MINIMAL_CAMPAIGN["campaign"],
+        "project": _MINIMAL_CAMPAIGN["project"],
+    }
+    result = check_R8(campaign, fully_setup)
+    assert not result.passed
+    assert result.message == "Missing required top-level keys: compute, objective, wandb"
+    assert (
+        result.remediation
+        == "Add the following keys to the campaign YAML: compute, objective, wandb"
+    )
 
 
 # ── R9: project.repo ────────────────────────────────────────────────
