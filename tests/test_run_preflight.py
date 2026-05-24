@@ -301,6 +301,69 @@ def test_main_cli_interface(mock_backend, tmp_path: Path) -> None:
     assert exit_code == 0
 
 
+def test_main_rejects_relative_campaign_path(tmp_path: Path, capsys) -> None:
+    """CLI args reject relative campaign paths before any filesystem mutation."""
+    exit_code = main(["--campaign", "campaign.yaml", "--cwd", str(tmp_path)])
+
+    assert exit_code == 2
+    assert "--campaign must be an absolute path" in capsys.readouterr().err
+    assert not (tmp_path / _STATE_DIR).exists()
+
+
+def test_main_rejects_relative_cwd_when_provided(tmp_path: Path, capsys) -> None:
+    """CLI args reject relative --cwd values when the flag is provided."""
+    campaign_file = _write_campaign(tmp_path)
+
+    exit_code = main(["--campaign", str(campaign_file), "--cwd", "."])
+
+    assert exit_code == 2
+    assert "--cwd must be an absolute path" in capsys.readouterr().err
+
+
+def test_main_rejects_missing_cwd(tmp_path: Path, capsys) -> None:
+    """A typoed --cwd must not be created indirectly by bootstrap."""
+    campaign_file = _write_campaign(tmp_path)
+    missing_cwd = tmp_path / "missing-project"
+
+    exit_code = main(["--campaign", str(campaign_file), "--cwd", str(missing_cwd)])
+
+    assert exit_code == 2
+    assert "--cwd must be an existing directory" in capsys.readouterr().err
+    assert not missing_cwd.exists()
+
+
+@mock.patch("scripts.run_preflight.run_all_backend_checks")
+def test_main_allows_omitted_cwd_as_current_directory(
+    mock_backend, tmp_path: Path, monkeypatch
+) -> None:
+    """Omitted --cwd is still supported, but resolves to the process cwd."""
+    mock_backend.side_effect = _mock_backend_all_pass
+    campaign_file = _write_campaign(tmp_path)
+    _scaffold_ready_state(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main(["--campaign", str(campaign_file)])
+
+    assert exit_code == 0
+
+
+@mock.patch("scripts.run_preflight.write_artifact")
+@mock.patch("scripts.run_preflight.run_all_backend_checks")
+def test_artifact_write_failure_returns_failed(
+    mock_backend, mock_write_artifact, tmp_path: Path, capsys
+) -> None:
+    """Artifact write failures return a clean exit code instead of a traceback."""
+    mock_backend.side_effect = _mock_backend_all_pass
+    mock_write_artifact.side_effect = OSError("permission denied")
+    campaign_file = _write_campaign(tmp_path)
+    _scaffold_ready_state(tmp_path)
+
+    exit_code = run_preflight(campaign_file, tmp_path)
+
+    assert exit_code == 1
+    assert "could not write readiness artifact" in capsys.readouterr().err
+
+
 # ── Test: flat campaign_name extraction ──────────────────────────────
 
 

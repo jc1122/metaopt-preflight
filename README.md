@@ -31,18 +31,25 @@ git clone https://github.com/jc1122/metaopt-preflight
 cd metaopt-preflight
 pip install -r requirements.txt
 
-# Run preflight from the repo root:
+# Run preflight from the metaopt-preflight repo root:
 python3 -m scripts.run_preflight \
   --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
   --cwd /absolute/path/to/project-root
 
-# Direct script form from the repo root:
+# Direct script form from the repo root, or with an absolute script path:
 python3 scripts/run_preflight.py \
   --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
   --cwd /absolute/path/to/project-root
 ```
 
-Use absolute paths for both flags so the invocation is unambiguous.
+For Codex, always pass both flags explicitly with absolute paths. The CLI
+rejects a relative `--campaign` and rejects a relative `--cwd` when `--cwd` is
+provided. If `--cwd` is omitted, the current process directory is used; reserve
+that form for local shell use where the working directory is already known.
+
+The module form (`python3 -m scripts.run_preflight`) must be run from the
+`metaopt-preflight` repo root or with an equivalent `PYTHONPATH`. The direct
+script form can be called by absolute script path from any shell cwd.
 
 `--campaign` points to the campaign YAML to parse. `--cwd` points to the target
 project root where preflight evaluates readiness, may scaffold `.ml-metaopt/`,
@@ -53,14 +60,14 @@ and writes `.ml-metaopt/preflight-readiness.json`.
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--campaign` | Yes | — | Path to the campaign YAML file that preflight parses |
-| `--cwd` | No | `.` | Project root directory where readiness is evaluated and the artifact is written |
+| `--cwd` | No | current process directory | Project root directory where readiness is evaluated and the artifact is written; if provided, it must be absolute |
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | READY — proceed with `ml-metaoptimization` |
-| 1 | FAILED — fix reported issues and re-run |
+| 1 | FAILED — fix reported issues and re-run; if the readiness artifact cannot be written, the error is printed to stderr |
 | 2 | Usage/input error — bad args, missing campaign file, or malformed YAML |
 
 Exit code `2` returns before the Emit phase, so no readiness artifact is

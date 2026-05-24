@@ -13,11 +13,14 @@ interface:
     campaign YAML passed by --campaign first; consult
     references/readiness-artifact.md for field-level artifact details and read
     references/backend-setup.md or references/repo-setup.md only when a
-    specific check or mutation boundary requires it. Run once with
-    --campaign <path> [--cwd <project-root>], perform only bounded idempotent
+    specific check or mutation boundary requires it. Run once with explicit
+    absolute --campaign <path> and --cwd <project-root> values; do not rely on
+    the process cwd when operating from Codex. Perform only bounded idempotent
     bootstrap mutations, and overwrite .ml-metaopt/preflight-readiness.json as
     the latest authoritative readiness artifact. You may create .ml-metaopt
     scaffolding and update the project-root .gitignore to ignore .ml-metaopt/,
     but you must not write .ml-metaopt/state.json, AGENTS.md, experiment code,
-    commits, or remote backend resources. There is no resume path: every
-    invocation starts from scratch.
+    commits, or remote backend resources. If artifact emission fails, report
+    the exit code 1 stderr diagnostic rather than treating the run as a
+    readiness result. There is no resume path: every invocation starts from
+    scratch.

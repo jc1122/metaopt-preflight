@@ -110,34 +110,42 @@ readiness artifact.
 
 ## Invocation
 
-Codex command shape from the repo root:
+Codex command shape from the `metaopt-preflight` repo root:
 
 ```bash
-# Preferred for Codex or any shell automation (run from the repo root):
+# Preferred for Codex or any shell automation:
 python3 -m scripts.run_preflight \
   --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
   --cwd /absolute/path/to/project-root
 
-# Direct script form from the repo root:
+# Direct script form from the repo root, or with an absolute script path:
 python3 scripts/run_preflight.py \
   --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
   --cwd /absolute/path/to/project-root
 ```
 
-Exit codes: `0` = READY, `1` = FAILED, `2` = usage/input error.
+Exit codes: `0` = READY, `1` = FAILED or artifact-write failure,
+`2` = usage/input error.
 
 `--campaign` identifies the YAML file to parse. `--cwd` identifies the target
 project root where preflight evaluates readiness, may scaffold `.ml-metaopt/`,
 and writes `.ml-metaopt/preflight-readiness.json`.
 
-Use absolute paths for both flags so the invocation is unambiguous.
+For Codex, always pass both flags explicitly with absolute paths. The CLI
+rejects a relative `--campaign` and rejects a relative `--cwd` when `--cwd` is
+provided. If `--cwd` is omitted, the current process directory is used; reserve
+that form for local shell use where the working directory is already known.
+
+The module form (`python3 -m scripts.run_preflight`) must run from the
+`metaopt-preflight` repo root or an equivalent `PYTHONPATH`; an absolute direct
+script invocation is valid from any shell cwd.
 
 ### CLI arguments
 
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `--campaign` | Yes | — | Path to campaign YAML file |
-| `--cwd` | No | `.` | Project root directory |
+| `--cwd` | No | current process directory | Project root directory; if provided, it must be absolute |
 
 ## Input contract
 
@@ -170,6 +178,9 @@ fields needed to compute artifact hashes and scope readiness checks. It does
 Preflight runs within the agent runtime provided by the caller. It does not
 declare an explicit runtime dependency — any agent model/runtime that can
 execute shell commands and read/write files is sufficient.
+
+The runtime must have write permission under `--cwd`; otherwise artifact
+emission fails cleanly with exit code `1` and a stderr diagnostic.
 
 ## Output contract
 

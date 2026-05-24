@@ -28,8 +28,8 @@ Do not broad-read the repository by default. Skip tests, implementation details,
 
 ## Inputs
 
-1. **Campaign YAML** — path to `ml_metaopt_campaign.yaml` (passed via `--campaign <path>`)
-2. **Working directory** — project root containing the git repository (passed via `--cwd <dir>`, defaults to current directory)
+1. **Campaign YAML** — absolute path to `ml_metaopt_campaign.yaml` (passed via `--campaign <path>`)
+2. **Working directory** — absolute project-root path containing the git repository (passed via `--cwd <dir>`; Codex must pass this explicitly)
 3. *(no further flags — the tool has no dry-run mode)*
 
 From the campaign YAML, you read only the fields needed for readiness checks and hash computation:
@@ -112,6 +112,9 @@ All mutations are idempotent. Re-applying to an already-ready environment is a n
 
 Write the readiness artifact to `.ml-metaopt/preflight-readiness.json` (overwriting any prior artifact) and print a human-readable summary to stdout.
 
+If the artifact cannot be written, report the stderr diagnostic and exit code
+`1`; do not treat that as a READY or FAILED readiness artifact.
+
 ## Filesystem side effects
 
 Allowed local side effects:
@@ -170,7 +173,7 @@ Key fields:
 | Code | Meaning |
 |------|---------|
 | 0 | `READY` — all checks passed, artifact emitted |
-| 1 | `FAILED` — one or more checks failed, artifact emitted with diagnostics |
+| 1 | `FAILED` — one or more checks failed and an artifact was emitted; also used when artifact emission itself fails, with stderr diagnostics |
 | 2 | Usage error — invalid arguments, campaign file not found, unparseable YAML |
 
 ## Invocation
@@ -181,11 +184,17 @@ python3 -m scripts.run_preflight \
   --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
   --cwd /absolute/path/to/project-root
 
-# Direct script form from the repo root:
+# Direct script form from the repo root, or with an absolute script path:
 python3 scripts/run_preflight.py \
   --campaign /absolute/path/to/ml_metaopt_campaign.yaml \
   --cwd /absolute/path/to/project-root
 ```
+
+Codex must use absolute paths for both flags. The CLI rejects relative
+`--campaign` values and rejects relative `--cwd` values when `--cwd` is
+provided. The `python3 -m` form requires the `metaopt-preflight` repo root (or
+equivalent `PYTHONPATH`) as the shell cwd; use the absolute direct script path
+when launching from another directory.
 
 ## What This Agent Does NOT Do
 
